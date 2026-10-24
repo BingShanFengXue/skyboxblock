@@ -1,0 +1,25 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.yg.skyboxblock.mixin",
+  "refmap": "skyboxblock-refmap.json",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["RegressionFluidMixin"],
+  "client": [
+    "LevelRendererMixin",
+    "BufferSourceMixin",
+    "GameRendererMixin",
+    "IrisPipelineMixin",
+    "IrisCompositeMixin",
+    "IrisExposureComputeMixin",
+    "RegressionShaderTimeMixin",
+    "RegressionWaterTextureMixin",
+    "CloudMeshAccess",
+    "CloudBuildRangeMixin",
+    "DistantBlockIgnoreMixin",
+    "FogColorAccess"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

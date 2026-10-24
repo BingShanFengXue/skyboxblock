@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "skybox_ip_fixture",
+  "version": "1.0.0",
+  "name": "Skybox Portal Fixture Harness",
+  "description": "Opt-in isolated same-dimension portal baseline harness. No skyboxblock rendering dependency.",
+  "environment": "client",
+  "license": "MIT",
+  "authors": ["Bing6512"],
+  "entrypoints": {
+    "client": ["dev.yg.skyboxfixture.PortalFixtureClient"]
+  },
+  "mixins": ["skyboxfixture.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "immersive_portals": "*",
+    "iris": "*"
+  }
+}

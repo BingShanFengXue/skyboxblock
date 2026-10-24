@@ -1,0 +1,201 @@
+plugins {
+    id 'fabric-loom' version '1.7.4'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+// 机器相关路径一律不写死在仓库里。
+// 解析顺序：-P<key>=<path> > 环境变量 > gradle.local.properties（已 git-ignore）> gradle.local.properties.example 提示。
+def localProps = new Properties()
+def localPropsFile = file('gradle.local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def localPath = { String propKey, String envKey ->
+    def v = project.findProperty(propKey) ?: System.getenv(envKey) ?: localProps.getProperty(propKey)
+    return (v instanceof String && v.trim()) ? v.trim() : null
+}
+// DH（Distant Horizons）只在编译期引用，不打包进产物。
+def dhApiJar = localPath('dh_api_jar', 'DH_API_JAR')
+def r30DhJar = localPath('r30_dh_jar', 'R30_DH_JAR') ?: dhApiJar
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    // Mojang 官方映射：渲染管线相关类（com.mojang.blaze3d.*、LevelRenderer、ShaderInstance）
+    // 与社区资料、Iris/Sodium 源码全部使用这套命名，避免二次心智映射。
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    // DH API 仅编译期使用：src/main 的 DistantSkyDepth 直接 import com.seibel.distanthorizons.api.*，
+    // 因此缺这个 jar 无法编译。用 -Pdh_api_jar=<path>、DH_API_JAR 环境变量或 gradle.local.properties 提供。
+    if (dhApiJar == null) {
+        throw new GradleException(
+            '缺少 Distant Horizons compileOnly jar。请用 -Pdh_api_jar=<path>、环境变量 DH_API_JAR，' +
+            '或把 dh_api_jar 写进 gradle.local.properties（示例见 gradle.local.properties.example）。')
+    }
+    compileOnly files(dhApiJar)
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+    filteringCharset = 'UTF-8'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = 'UTF-8'
+    it.options.compilerArgs << '-parameters'
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+jar {
+    // MIT 要求分发时附带版权与许可声明。
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+    from('AUTHORS.md')
+    from('THIRD_PARTY_NOTICES.md')
+    from('LICENSES') { into 'META-INF/licenses/skyboxblock' }
+    manifest {
+        attributes(
+            'Implementation-Title'  : 'Sky Box Block',
+            'Implementation-Version': project.version
+        )
+    }
+}
+
+// Source distributions carry the same notices as the binary distribution.
+tasks.named('sourcesJar', Jar) {
+    from('LICENSE') { rename { 'LICENSE_skyboxblock' } }
+    from('AUTHORS.md')
+    from('THIRD_PARTY_NOTICES.md')
+    from('LICENSES') { into 'META-INF/licenses/skyboxblock' }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 导出编译 classpath：供 tools/verify-javac.ps1 在**不跑 gradle** 的情况下
+// 用 javac 直接编译整棵源码树（快速自验）。
+// ─────────────────────────────────────────────────────────────────────────────
+tasks.register('dumpCp') {
+    group = 'verification'
+    description = '把 main 源集的编译 classpath 导出到 build/compile-classpath.txt'
+    def outFile = layout.buildDirectory.file('compile-classpath.txt')
+    def cp = sourceSets.main.compileClasspath
+    doLast {
+        def f = outFile.get().asFile
+        f.parentFile.mkdirs()
+        f.setText(cp.asPath, 'UTF-8')
+        logger.lifecycle("classpath entries: ${cp.files.size()} -> ${f}")
+    }
+}
+
+// Executable, framework-free mathematical regression (no OpenGL context needed).
+tasks.register('renderMathTest', JavaExec) {
+    group = 'verification'
+    description = 'Validate clipping, direction precision, winding and configuration precedence'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.client.SkyGeometryRegression'
+    enableAssertions = true
+    args layout.buildDirectory.file('reports/render-math-regression.txt').get().asFile.absolutePath
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('renderMathTest')
+}
+
+// Separate, opt-in test mod: true no-skybox portal baselines must not load main output.
+sourceSets {
+    portalFixture {
+        java.setSrcDirs(['src/portalFixture/java'])
+        resources.setSrcDirs(['src/portalFixture/resources'])
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+    // Owned-only R30 probe; never bundled into the production skyboxblock JAR.
+    r30Probe {
+        java.setSrcDirs(['src/r30Probe/java'])
+        resources.setSrcDirs(['src/r30Probe/resources'])
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+configurations {
+    portalFixtureImplementation.extendsFrom implementation
+    portalFixtureCompileOnly.extendsFrom compileOnly
+    r30ProbeImplementation.extendsFrom implementation
+    r30ProbeCompileOnly.extendsFrom compileOnly
+}
+dependencies {
+    // Compile API against the actually installed, pinned DH, not online preview docs.
+    // r30Probe 默认与主源码共用同一个 DH jar，可用 r30_dh_jar 单独覆盖。
+    if (r30DhJar == null) {
+        throw new GradleException('r30Probe 需要 DH jar：请设置 dh_api_jar（或 r30_dh_jar）。')
+    }
+    r30ProbeCompileOnly files(r30DhJar)
+}
+loom {
+    // Explicit registration disables Loom's automatic main registration: declare BOTH source sets.
+    mixin {
+        useLegacyMixinAp = true
+        add sourceSets.main, 'skyboxblock-refmap.json'
+        add sourceSets.portalFixture, 'skyboxfixture.refmap.json'
+        add sourceSets.r30Probe, 'skyboxprobe-r30-refmap.json'
+    }
+}
+def fixtureDevJar = tasks.register('portalFixtureJar', Jar) {
+    dependsOn tasks.named('portalFixtureClasses')
+    from sourceSets.portalFixture.output
+    archiveBaseName.set('skybox-portal-fixture')
+    archiveVersion.set('1.0.0')
+    archiveClassifier.set('dev')
+    from('LICENSE') { rename { 'LICENSE_skybox_ip_fixture' } }
+}
+tasks.register('remapPortalFixtureJar', net.fabricmc.loom.task.RemapJarTask) {
+    dependsOn fixtureDevJar
+    inputFile.set(fixtureDevJar.flatMap { it.archiveFile })
+    classpath.setFrom(sourceSets.portalFixture.compileClasspath)
+    addNestedDependencies.set(false)
+    archiveBaseName.set('skybox-portal-fixture')
+    archiveVersion.set('1.0.0')
+    archiveClassifier.set('')
+}
+
+def r30ProbeDevJar = tasks.register('r30ProbeJar', Jar) {
+    dependsOn tasks.named('r30ProbeClasses')
+    from sourceSets.r30Probe.output
+    archiveBaseName.set('skybox-validation-probe')
+    archiveVersion.set('r34.2')
+    archiveClassifier.set('dev')
+    from('LICENSE') { rename { 'LICENSE_skybox_validation_probe' } }
+}
+tasks.register('remapR30ProbeJar', net.fabricmc.loom.task.RemapJarTask) {
+    dependsOn r30ProbeDevJar
+    inputFile.set(r30ProbeDevJar.flatMap { it.archiveFile })
+    classpath.setFrom(sourceSets.r30Probe.compileClasspath)
+    addNestedDependencies.set(false)
+    archiveBaseName.set('skybox-validation-probe')
+    archiveVersion.set('r34.2')
+    archiveClassifier.set('')
+}

@@ -1,0 +1,18 @@
+{
+  "blend":{"func":"max","srcrgb":"one","dstrgb":"one","srcalpha":"one","dstalpha":"one"},
+  "vertex":"skyboxblock:world_sky",
+  "fragment":"skyboxblock:seam_diagnostic",
+  "attributes":["Position"],
+  "samplers":[{"name":"WorldDepth"}],
+  "uniforms":[
+    {"name":"WorldProjection","type":"matrix4x4","count":16,"values":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]},
+    {"name":"WorldView","type":"matrix4x4","count":16,"values":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]},
+    {"name":"SkyViewport","type":"float","count":4,"values":[0,0,1,1]},
+    {"name":"ClipPlane","type":"float","count":4,"values":[0,0,0,1]},
+    {"name":"ClippingEnabled","type":"int","count":1,"values":[0]},
+    {"name":"RasterScale","type":"float","count":2,"values":[1,1]},
+    {"name":"RasterJitter","type":"float","count":2,"values":[0,0]},
+    {"name":"DepthUvTransform","type":"float","count":4,"values":[1,1,0,0]},
+    {"name":"Mode","type":"int","count":1,"values":[0]}
+  ]
+}

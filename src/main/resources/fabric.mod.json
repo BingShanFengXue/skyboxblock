@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "skyboxblock",
+  "version": "${version}",
+  "name": "Sky Box Block",
+  "description": "天空盒方块：原版独立天空、纯白、纯黑及六套连续全景天空。Minecraft 1.21.1 Fabric；各环境验证范围见项目交付记录。新增用户提供素材的来源声明见 THIRD_PARTY_NOTICES.md。", 
+  "authors": [
+    "Bing6512"
+  ],
+  "contributors": [
+    "ChatGPT (OpenAI) - current AI-assisted engineering and verification",
+    "DeepSeek V4.1 Flash - early AI-assisted implementation",
+    "GPT6.1SOL engineering subagents - user-selected runtime route"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/skyboxblock/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.yg.skyboxblock.SkyboxBlockMod"
+    ],
+    "client": [
+      "dev.yg.skyboxblock.client.SkyboxBlockClient"
+    ]
+  },
+  "mixins": [
+    "skyboxblock.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "iris": "*",
+    "immersive_portals": "*",
+    "distanthorizons": "*"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "note": "Exact matches and long common line blocks only; human provenance review remains required | localRoot 已改为相对路径（本副本脱敏）",
+  "references": {
+    "literal-sky-block": {
+      "localRoot": "reference/literal-sky-block",
+      "files": 37,
+      "exactByteMatches": [],
+      "pixelMatches": [],
+      "longCommonCodeBlocks": []
+    },
+    "shadered": {
+      "localRoot": "reference/shadered",
+      "files": 404,
+      "exactByteMatches": [],
+      "pixelMatches": [],
+      "longCommonCodeBlocks": []
+    }
+  },
+  "generatedAssets": {
+    "textures/block/sky_block.png": {
+      "matchesOwnGenerator": true,
+      "actualPixelSha256": "c19cf5761613441a32c086df9bb570744a647c5c329e9e0ae5d26b168b8e1a57",
+      "source": "tools/gen-skybox-textures.py"
+    },
+    "icon.png": {
+      "matchesOwnGenerator": true,
+      "actualPixelSha256": "bfc1fb9185b3a1ab2ade91bd421753c3b303b3a49551506c5ba853c4eb972408",
+      "source": "tools/gen-skybox-textures.py"
+    }
+  }
+}

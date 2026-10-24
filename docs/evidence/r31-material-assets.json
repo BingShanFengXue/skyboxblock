@@ -1,0 +1,153 @@
+{
+  "materials": [
+    {
+      "style": "white",
+      "block": "skyboxblock:white_sky_block",
+      "displayName": "天空盒方块（纯白）"
+    },
+    {
+      "style": "black",
+      "block": "skyboxblock:black_sky_block",
+      "displayName": "天空盒方块（纯黑）"
+    },
+    {
+      "style": "kloppenheim",
+      "block": "skyboxblock:kloppenheim_sky_block",
+      "displayName": "天空盒方块（晴空·克洛彭海姆）",
+      "source": "kloppenheim_06_puresky_1k.hdr",
+      "sourceSha256": "206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34",
+      "exposure": 1.0803374366462275,
+      "linearMedianLuminance": 0.41653652343750003,
+      "operator": "global Reinhard + sRGB; static LDR display, no runtime HDR exposure",
+      "sourceWrapMeanAbsoluteRGB": 0.314453125,
+      "wrapMaxRGB": 0,
+      "northPoleMaxRGBRange": 0,
+      "southPoleMaxRGBRange": 0,
+      "seamBandPixels": 4,
+      "poleBandPixels": 2,
+      "width": 1024,
+      "height": 512,
+      "outputSha256": "3f6f8e4d7a3730d568565d034c4def9d026bf8f4ed98c8efddc47bed87ecbaaf"
+    },
+    {
+      "style": "syferfontein",
+      "block": "skyboxblock:syferfontein_sky_block",
+      "displayName": "天空盒方块（晴空·赛弗方丹）",
+      "source": "syferfontein_6d_clear_puresky_1k.hdr",
+      "sourceSha256": "12c2a21b67d842a95b8e7dbb98825c187c19ea3d62babc8070327e72af619592",
+      "exposure": 2.793926121026477,
+      "linearMedianLuminance": 0.16106367187499998,
+      "operator": "global Reinhard + sRGB; static LDR display, no runtime HDR exposure",
+      "sourceWrapMeanAbsoluteRGB": 0.1712239533662796,
+      "wrapMaxRGB": 0,
+      "northPoleMaxRGBRange": 0,
+      "southPoleMaxRGBRange": 0,
+      "seamBandPixels": 4,
+      "poleBandPixels": 2,
+      "width": 1024,
+      "height": 512,
+      "outputSha256": "bc22a79910151934dd6e9c96fa616c493cfdbb252d9819f81452666a537601b7"
+    },
+    {
+      "style": "dusk",
+      "block": "skyboxblock:dusk_sky_block",
+      "displayName": "天空盒方块（黄昏）",
+      "source": "天空_04_黄昏_qwantani_dusk_2_4096x2048.jpg",
+      "sourceSha256": "400fee5cbbc940bff1ea257da3c40da3e58dbd7ca0105591a5aa2b3f98f2ab41",
+      "sourceWrapMeanAbsoluteRGB": 1.2734375,
+      "wrapMaxRGB": 0,
+      "northPoleMaxRGBRange": 0,
+      "southPoleMaxRGBRange": 0,
+      "seamBandPixels": 16,
+      "poleBandPixels": 6,
+      "width": 4096,
+      "height": 2048,
+      "outputSha256": "cc73e3d5efaf1ff23eaa537d932bd51ee33ecebf50e15d85c1fdac8b3f853caa"
+    },
+    {
+      "style": "galaxy",
+      "block": "skyboxblock:galaxy_sky_block",
+      "displayName": "天空盒方块（银河）",
+      "source": "宇宙_01_银河全景_SolarSystemScope_8192x4096_提亮版.jpg",
+      "sourceSha256": "9803ca40c438172678e633906faf5e49b706ab9dd4f67e351d69e91e129f18a1",
+      "sourceWrapMeanAbsoluteRGB": 1.8409830331802368,
+      "wrapMaxRGB": 0,
+      "northPoleMaxRGBRange": 0,
+      "southPoleMaxRGBRange": 0,
+      "seamBandPixels": 16,
+      "poleBandPixels": 6,
+      "width": 4096,
+      "height": 2048,
+      "outputSha256": "f2b9d4f424b844b01d48bd59c0af8ea7b65398ef38a68ee8e1c7465e95e7073e"
+    },
+    {
+      "style": "lush",
+      "block": "skyboxblock:lush_sky_block",
+      "displayName": "天空盒方块（葱郁行星）",
+      "source": "行星_Lush_02.png",
+      "sourceSha256": "c64491db498974772a3b0958c2e377d52a8b0d5280cd29d435ccd7d785ae6e7c",
+      "sourceWrapMeanAbsoluteRGB": 1.4615885019302368,
+      "wrapMaxRGB": 0,
+      "northPoleMaxRGBRange": 0,
+      "southPoleMaxRGBRange": 0,
+      "seamBandPixels": 8,
+      "poleBandPixels": 4,
+      "width": 2048,
+      "height": 1024,
+      "outputSha256": "b58137ce860a1d4f4af12975e98bd6c9237ea21694b1855e0da02b768a7856fc"
+    },
+    {
+      "style": "apocalypse",
+      "block": "skyboxblock:apocalypse_sky_block",
+      "displayName": "天空盒方块（末日陆地）",
+      "cubeRotationsCCW": {
+        "front": 0,
+        "right": 0,
+        "back": 0,
+        "left": 0,
+        "up": 0,
+        "down": 0
+      },
+      "cubeRawEdgeMeanAbsoluteRGB": 0.28960786764349417,
+      "cubeEdges": 12,
+      "cubeBlendTexels": 3.072,
+      "sources": [
+        {
+          "path": "16_末日陆地_ApocalypseLand\\末日陆地_front.png",
+          "sha256": "acb5ba9d7336aba0d0bcffb0b2330909bc1a396f95c2370010af6eaeef83b7f4"
+        },
+        {
+          "path": "16_末日陆地_ApocalypseLand\\末日陆地_right.png",
+          "sha256": "40009fcee7c63944482ff51462bf78b3e22b5b6a3854fdb14be9a634b77bd4f3"
+        },
+        {
+          "path": "16_末日陆地_ApocalypseLand\\末日陆地_back.png",
+          "sha256": "2082fa355eb6df4af0dee982ea2042596cc9e02fa7438414fd30273d9c39810a"
+        },
+        {
+          "path": "16_末日陆地_ApocalypseLand\\末日陆地_left.png",
+          "sha256": "bc32a8c6ab9f5240b144caa37778525cf661ca87a6d421385813b9b871b86ba7"
+        },
+        {
+          "path": "16_末日陆地_ApocalypseLand\\末日陆地_up.png",
+          "sha256": "7d5f8352a326a806cecab697d1eaf8b78d58ce75e067b05f726f901806505fc3"
+        },
+        {
+          "path": "16_末日陆地_ApocalypseLand\\末日陆地_down.png",
+          "sha256": "fa688ca54f1da47afd5fd5bad6fb3b6fed9812fd60616274e9f4d94cfbafca68"
+        }
+      ],
+      "sourceWrapMeanAbsoluteRGB": 0.2994791567325592,
+      "wrapMaxRGB": 0,
+      "northPoleMaxRGBRange": 0,
+      "southPoleMaxRGBRange": 0,
+      "seamBandPixels": 8,
+      "poleBandPixels": 4,
+      "width": 2048,
+      "height": 1024,
+      "outputSha256": "2f652782dc8ca5c1278072a3ed30eaa15099b5053338cf473fcd4d59ac0be109"
+    }
+  ],
+  "sourceDirectory": "skyboxblock-materials/04-final",
+  "inputsUnmodified": true
+}

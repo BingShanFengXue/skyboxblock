@@ -1,0 +1,39 @@
+# 构建与缓存（绝不入库：build/ 约 64 GB、.gradle-home 约 660 MB）
+/build/
+/.gradle/
+/.gradle-home/
+/out/
+*.class
+
+# 运行实例与日志
+/logs/
+/run/
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# Python
+__pycache__/
+*.py[cod]
+
+# 本机配置（含真实用户名/盘符，只留在本地）
+/tools/local.paths.json
+/gradle.local.properties
+
+# 第三方模组残留配置与本地凭证
+config/ohwhale/
+bridge.json
+*secret.key
+.dsh/
+local.properties
+*.jks
+*.p12
+*.pem
+
+# 编辑器与系统
+.idea/
+*.iml
+.vscode/
+Thumbs.db
+.DS_Store
+desktop.ini

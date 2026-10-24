@@ -1,0 +1,12 @@
+{
+  "itemGroup.skyboxblock.sky": "天空盒方块",
+  "block.skyboxblock.sky_block": "天空盒方块（原版）",
+  "block.skyboxblock.white_sky_block": "天空盒方块（纯白）",
+  "block.skyboxblock.black_sky_block": "天空盒方块（纯黑）",
+  "block.skyboxblock.kloppenheim_sky_block": "天空盒方块（晴空·A）",
+  "block.skyboxblock.syferfontein_sky_block": "天空盒方块（晴空·B）",
+  "block.skyboxblock.dusk_sky_block": "天空盒方块（黄昏）",
+  "block.skyboxblock.galaxy_sky_block": "天空盒方块（银河）",
+  "block.skyboxblock.lush_sky_block": "天空盒方块（葱郁行星）",
+  "block.skyboxblock.apocalypse_sky_block": "天空盒方块（末日陆地）"
+}

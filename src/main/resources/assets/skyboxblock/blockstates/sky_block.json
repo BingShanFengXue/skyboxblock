@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "skyboxblock:block/sky_block"
+    }
+  }
+}

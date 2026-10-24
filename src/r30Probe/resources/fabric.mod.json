@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "skybox_r30_probe",
+  "version": "0.1.0-r34.2",
+  "name": "Sky Box R30 Owned Validation Probe",
+  "description": "Explicit isolated-fixture dynamic DH and performance measurements; not a production dependency.",
+  "environment": "client",
+  "entrypoints": {"client": ["dev.yg.skyboxprobe.R30Probe"]},
+  "mixins": ["skyboxprobe-r30.mixins.json"],
+  "depends": {"fabricloader": ">=0.16.0", "minecraft": "~1.21.1", "java": ">=21", "fabric-api": "*", "skyboxblock": "*"},
+  "license": "MIT"
+}

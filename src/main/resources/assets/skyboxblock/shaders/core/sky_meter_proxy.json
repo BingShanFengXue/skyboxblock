@@ -1,0 +1,11 @@
+{
+  "vertex":"skyboxblock:sky_meter_proxy",
+  "fragment":"skyboxblock:sky_meter_proxy",
+  "attributes":["Position"],
+  "samplers":[{"name":"MeterAtlas"},{"name":"GeneratedSky"},{"name":"SkyCoverage"},{"name":"WorldOpaqueDepth"},{"name":"ExposureData"}],
+  "uniforms":[
+    {"name":"TextureExtent","type":"float","count":2,"values":[1,1]},
+    {"name":"MeterOffset","type":"float","count":2,"values":[0,0]},
+    {"name":"CoverageTransform","type":"float","count":4,"values":[1,1,0,0]}
+  ]
+}
