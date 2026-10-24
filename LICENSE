@@ -19,19 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-## Third-party attributions
-
-Portions of the rendering approach are derived from Literal Sky Block:
-Copyright (c) 2022 Kristiāns Micītis
-
-The full upstream MIT license text is kept verbatim in
-[LICENSES/Literal-Sky-Block-MIT.txt](<LICENSES/Literal-Sky-Block-MIT.txt>) and is
-bundled inside the mod jar as
-`META-INF/licenses/skyboxblock/Literal-Sky-Block-MIT.txt`.
-
-Other third-party material (user-provided panorama textures) is documented per
-asset in [THIRD_PARTY_NOTICES.md](<THIRD_PARTY_NOTICES.md>); the project code
-itself remains MIT.
