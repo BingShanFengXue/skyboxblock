@@ -16,6 +16,7 @@
     {"name": "ProjMat", "type": "matrix4x4", "count": 16,
      "values": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]},
     {"name": "CloudFogStart", "type": "float", "count": 1, "values": [128]},
-    {"name": "CloudFogEnd", "type": "float", "count": 1, "values": [384]}
+    {"name": "CloudFogEnd", "type": "float", "count": 1, "values": [384]},
+    {"name": "CloudOpacity", "type": "float", "count": 1, "values": [1]}
   ]
 }

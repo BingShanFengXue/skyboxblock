@@ -1,5 +1,7 @@
 package dev.yg.skyboxblock.client;
 
+import dev.yg.skyboxblock.SkyEnvironment;
+
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexBuffer;
@@ -15,7 +17,7 @@ import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL30;
 
-/** Vanilla 1.21.1 sky geometry and blend ordering in a private, view-owned canvas. No world RGB input. */
+/** Vanilla 1.21.1 sky in a private view-owned canvas, with opt-in environment overrides. */
 public final class VanillaSkyScene {
     private static final ResourceLocation SUN=ResourceLocation.withDefaultNamespace("textures/environment/sun.png");
     private static final ResourceLocation MOON=ResourceLocation.withDefaultNamespace("textures/environment/moon_phases.png");
@@ -41,21 +43,23 @@ public final class VanillaSkyScene {
             frame.privateSkyClipBefore=GL11.glIsEnabled(GL30.GL_CLIP_DISTANCE0);
             if (frame.sky==null) frame.sky=SkyDisplayState.sample(frame.level,frame.camera,frame.partialTick);
             SkyDisplayState sky=frame.sky;
+            SkyEnvironment env=sky.environment;
             TextureTarget canvas=display ? displayTarget : target;
             if (canvas==null || canvas.width!=width || canvas.height!=height) {
                 if (canvas!=null) canvas.destroyBuffers();
                 SkyGlState.active(GL13.GL_TEXTURE0);
                 canvas=new TextureTarget(width,height,true,Minecraft.ON_OSX);
+                try { SkyCloudStencil.install(canvas); }
+                catch(RuntimeException failure) { canvas.destroyBuffers();throw failure; }
                 if (display) displayTarget=canvas; else target=canvas;
             }
-            // Native sky starts over the actual FogRenderer clear color, not a hand-painted gradient.
             canvas.setClearColor((float)sky.fogColor.x,(float)sky.fogColor.y,(float)sky.fogColor.z,1);
             canvas.clear(Minecraft.ON_OSX); canvas.bindWrite(true);
             GL11.glDepthRange(0,1); SkyGlState.opaqueState(); state.clearSamplers(); RenderFlags.sky();
             frame.privateSkyClipDuring=GL11.glIsEnabled(GL30.GL_CLIP_DISTANCE0);
-            float fogStart=frame.nativeSkyFogCaptured ? frame.nativeSkyFogStart : 0F;
-            float fogEnd=frame.nativeSkyFogCaptured ? frame.nativeSkyFogEnd
-                    : Minecraft.getInstance().options.getEffectiveRenderDistance()*16F;
+            float fogStart=SkyEnvironmentMath.fogStart(env,frame.nativeSkyFogCaptured ? frame.nativeSkyFogStart : 0F);
+            float fogEnd=SkyEnvironmentMath.fogEnd(env,frame.nativeSkyFogCaptured ? frame.nativeSkyFogEnd
+                    : Minecraft.getInstance().options.getEffectiveRenderDistance()*16F);
             background.getUniform("FogStart").set(fogStart);
             background.getUniform("FogEnd").set(fogEnd);
             background.getUniform("FogShape").set(frame.nativeSkyFogCaptured ? frame.nativeSkyFogShape : 0);
@@ -80,26 +84,38 @@ public final class VanillaSkyScene {
                     .rotate(Axis.XP.rotationDegrees(sky.phase*360F));
             Matrix4f solarMvp=new Matrix4f(projection).mul(solarView);
             if (celestial!=null) {
-                celestial.getUniform("SkyMvp").set(solarMvp);
+                celestial.getUniform("SkyMvp").set(env.has("sun_angle")
+                        ? celestialMvp(frame,projection,env.number("sun_angle",0)) : solarMvp);
                 celestial.getUniform("DrawColor").set(1F,1F,1F,weatherAlpha);
                 celestial.setSampler("Sampler0",texture(SUN));
                 quad(celestial,30,100,false,0,0,1,1);
+                celestial.getUniform("SkyMvp").set(env.has("moon_angle")
+                        ? celestialMvp(frame,projection,SkyEnvironmentMath.angle(env.number("moon_angle",0))-180F) : solarMvp);
                 int phase=sky.moonPhase;
                 float u=(phase%4)/4F,v=(phase/4)/2F;
                 celestial.setSampler("Sampler0",texture(MOON));
                 quad(celestial,20,-100,true,u,v,u+.25F,v+.5F);
             }
-            // Vanilla draws stars after the discs and uses brightness in RGB AND alpha.
-            float brightness=sky.starBrightness*weatherAlpha;
+            // Celestial objects are not fogged. Auto mode keeps native RGB-and-alpha star blending.
+            float brightness=sky.starBrightness*(env.has("star_brightness") ? 1F : weatherAlpha);
             VertexBuffer starBuffer=((CloudMeshAccess)frame.renderer).skyboxblock$getStarBuffer();
             if (stars!=null && starBuffer!=null && brightness>0) {
-                stars.getUniform("SkyMvp").set(solarMvp);
+                stars.getUniform("SkyMvp").set(env.has("star_angle")
+                        ? celestialMvp(frame,projection,env.number("star_angle",0)) : solarMvp);
                 stars.getUniform("DrawColor").set(brightness,brightness,brightness,brightness);
                 RenderSystem.setShader(() -> stars);
                 starBuffer.bind(); stars.apply(); starBuffer.draw(); stars.clear(); VertexBuffer.unbind();
             }
+            if (dawn!=null && env.flag("has_sky_occluder",false)) {
+                // Fog-colored lower hemisphere, drawn last so it genuinely covers sun/moon/stars.
+                blend(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA,GL11.GL_ONE,GL11.GL_ZERO);
+                dawn.getUniform("SkyMvp").set(skyMvp);
+                MESH.drawColored(dawn,SkyVanillaGeometry.occluder((float)sky.fogColor.x,
+                        (float)sky.fogColor.y,(float)sky.fogColor.z));
+            }
             RenderSystem.disableBlend(); GL11.glDisable(GL11.GL_BLEND);
-            if (frame.level.effects().skyType()==net.minecraft.client.renderer.DimensionSpecialEffects.SkyType.NORMAL
+            if (!env.has("has_sky_occluder")
+                    && frame.level.effects().skyType()==net.minecraft.client.renderer.DimensionSpecialEffects.SkyType.NORMAL
                     && frame.camera.y<frame.level.getLevelData().getHorizonHeight(frame.level)) {
                 background.getUniform("SkyMvp").set(new Matrix4f(projection).mul(new Matrix4f(frame.view).translate(0,12,0)));
                 background.getUniform("DrawColor").set(0F,0F,0F,1F);
@@ -111,6 +127,10 @@ public final class VanillaSkyScene {
             PortalViewCapture.privateScene(frame,canvas,display);
             return canvas.getColorTextureId();
         }
+    }
+    private static Matrix4f celestialMvp(SkyWorldRenderer.Frame frame,Matrix4f projection,float angle) {
+        return new Matrix4f(projection).mul(new Matrix4f(frame.view).rotate(Axis.YP.rotationDegrees(-90))
+                .rotate(Axis.XP.rotationDegrees(SkyEnvironmentMath.angle(angle))));
     }
     private static void blend(int src,int dst,int srcAlpha,int dstAlpha) {
         com.mojang.blaze3d.platform.GlStateManager._blendFuncSeparate(src,dst,srcAlpha,dstAlpha);

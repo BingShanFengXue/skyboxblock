@@ -1,5 +1,18 @@
 # Sky Box Block（天空盒方块）
 
+## R36 服务端环境属性与云接缝修复（2026-10-31，验证完成）
+
+最终构建 **1.0.4-test.2-r36**：原版天空盒 15 项环境属性改为服务端 world 级权威配置，变更同步所有同版本玩家；新增服务器统一私有天空时间控制；修复移动云相交面重复透明混合造成的亮点接缝。
+
+- [R36指令手册](<docs/COMMANDS-R36-2026-10-31.md>)；[R36交付报告](<docs/R36-DELIVERY-2026-10-31.md>)；[原版属性语义手册](<docs/VANILLA-ENVIRONMENT-ATTRIBUTES.md>)。
+- 变更命令需要权限等级2，查询对所有玩家开放；旧 `cloudheight`、`clouddistance`、`cloudfade`、根 `reload` 已移除。
+- 云修复采用私有 stencil 首片元消费，不改云网格、UV、纹理或世界 framebuffer；原版与 Iris/FSR2 各 128 帧均无重复透明混合、无覆盖丢失，[alpha 对照](<docs/screenshots/r36-cloud-seam-comparison-20261031.png>)。
+- 服务端后端 91 项、命令/权限/TAB/时间 782 项、天空时间 68,012 项、环境渲染 42,257 项、既有数学 389,385 项等共 **500,811** 项 Java 断言通过；包审计 76/76；真实专服加双客户端 29/29 通过（含重启后重新入服；该矩阵跑在前一构建 `711fd91f…` 上，交付包见下行哈希）。证据在 `build/r36-multiplayer/`。
+- 颜色统一为 `#RRGGBB` / `#AARRGGBB`；`0x…` 等其他写法一律拒绝。`time set` 不解除已有锁定。
+- 下载：[R36 安装包](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.4-test.2-r36/skyboxblock-1.0.4-test.2-r36.jar>)；[R36 验证 probe](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.4-test.2-r36/skybox-validation-probe-r36.jar>)；[源码与证据包](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.4-test.2-r36/skybox-r36-source-and-evidence.zip>)。交付包 SHA-256 `465836d84bbbbff0445c4c5e306b8092045ba77f103df3831465d8c32d6d9d80`。
+- 客户端与服务端都需安装本版；未安装的客户端不会收到同步。多人矩阵为本机回环双客户端，不代表公网并发结论。
+- 未替换用户实例、存档或光影包；构建产物经 GitHub Release 分发，不入仓库。
+
 ## R34.2 交界稳定与移动边缘（2026-10-24，已交付）
 
 最终构建 **1.0.3-test.4-r34.2**。ITRP显示端按四采样真实几何深度选择天空材质，消除所测低分辨率抖动材质边界波动；原版按几何覆盖率合成，减轻行走硬边，不整屏模糊。原生DH3.3.3仅在归属／尺寸／格式校验后，用其未污染背景源重算边缘一次合成，解决独立初审发现的重复混合与背景覆盖问题。

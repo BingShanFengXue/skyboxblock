@@ -94,7 +94,7 @@ Write-Host "project : $Project"
 Write-Host "sources : $($lines.Count)"
 
 $process = Start-Process -FilePath $javac `
-    -ArgumentList @('-encoding', 'UTF-8', '-proc:none', '-nowarn', '-d', $classes, '-cp', $classPath, "@$argFile") `
+    -ArgumentList @('-encoding', 'UTF-8', '-proc:none', '-nowarn', '-d', ('"' + $classes + '"'), '-cp', ('"' + $classPath + '"'), ('"@' + $argFile + '"')) `
     -NoNewWindow -Wait -PassThru `
     -RedirectStandardOutput (Join-Path $work 'javac-stdout.txt') `
     -RedirectStandardError $stderrFile

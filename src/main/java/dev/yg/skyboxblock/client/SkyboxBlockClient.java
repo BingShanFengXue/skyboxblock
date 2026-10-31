@@ -10,7 +10,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallbac
 public final class SkyboxBlockClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
         BlockEntityRendererRegistry.register(SkyboxBlockMod.SKY_BLOCK_ENTITY, SkyBlockEntityRenderer::new);
-        SkyboxCommands.register();
+        SkyboxServerState.register();
         if(ModCompat.DISTANT_HORIZONS) {
             try { DistantSkyDepth.register(); }
             catch(RuntimeException | LinkageError error) { SkyboxBlockMod.LOGGER.warn("[skyboxblock] optional DH render event adapter unavailable",error); }

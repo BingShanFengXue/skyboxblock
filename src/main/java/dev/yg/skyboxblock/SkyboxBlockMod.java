@@ -49,6 +49,8 @@ public final class SkyboxBlockMod implements ModInitializer {
                 .title(Component.translatable("itemGroup.skyboxblock.sky"))
                 .icon(() -> new ItemStack(SKY_BLOCK))
                 .displayItems((parameters, output) -> SKY_BLOCKS.values().forEach(output::accept)).build());
+        dev.yg.skyboxblock.network.SkyboxNetworking.register();
+        dev.yg.skyboxblock.server.SkyboxServerCommands.register();
         LOGGER.info("[skyboxblock] initialized: {} sky window styles", SKY_BLOCKS.size());
     }
 }

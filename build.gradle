@@ -121,8 +121,57 @@ tasks.register('renderMathTest', JavaExec) {
     args layout.buildDirectory.file('reports/render-math-regression.txt').get().asFile.absolutePath
 }
 
+tasks.register('environmentRenderTest', JavaExec) {
+    group = 'verification'
+    description = 'Validate environment render math, independent angles, cloud height and occluder geometry'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.client.SkyEnvironmentRenderRegression'
+    enableAssertions = true
+    args layout.buildDirectory.file('reports/r35-environment-render-regression.txt').get().asFile.absolutePath
+}
+
+tasks.register('environmentTest', JavaExec) {
+    group = 'verification'
+    description = 'Validate all environment attribute types, aliases and immutable snapshots'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.client.SkyEnvironmentRegression'
+    args layout.buildDirectory.file('reports/r35-environment-regression.txt').get().asFile.absolutePath
+}
+
+// R36 command and persistence regressions exercise the authoritative server implementation.
+
+tasks.register('environmentCommandTest', JavaExec) {
+    group = 'verification'
+    description = 'Execute server commands, permissions, unique completion and private time controls'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.server.ServerCommandRegression'
+    args layout.buildDirectory.file('reports/r36-server-command-regression.txt').get().asFile.absolutePath
+}
+
+tasks.register('environmentBoundaryTest', JavaExec) {
+    group = 'verification'
+    description = 'Validate authoritative server persistence, snapshots and synchronized clock anchors'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.server.SkyboxServerBackendRegression'
+    args layout.buildDirectory.file('reports/r36-server-backend-regression.txt').get().asFile.absolutePath
+}
+
+tasks.register('skyTimeTest', JavaExec) {
+    group = 'verification'
+    description = 'Validate every sky-clock phase and shared persisted server tick anchors'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.client.SkyTimeRegression'
+    args layout.buildDirectory.file('reports/r36-clock-regression.txt').get().asFile.absolutePath
+}
+
 tasks.named('check') {
-    dependsOn tasks.named('renderMathTest')
+    dependsOn tasks.named('renderMathTest'), tasks.named('environmentRenderTest'), tasks.named('skyTimeTest'),
+            tasks.named('environmentTest'), tasks.named('environmentCommandTest'), tasks.named('environmentBoundaryTest')
 }
 
 // Separate, opt-in test mod: true no-skybox portal baselines must not load main output.
@@ -186,7 +235,7 @@ def r30ProbeDevJar = tasks.register('r30ProbeJar', Jar) {
     dependsOn tasks.named('r30ProbeClasses')
     from sourceSets.r30Probe.output
     archiveBaseName.set('skybox-validation-probe')
-    archiveVersion.set('r34.2')
+    archiveVersion.set('r36')
     archiveClassifier.set('dev')
     from('LICENSE') { rename { 'LICENSE_skybox_validation_probe' } }
 }
@@ -196,6 +245,6 @@ tasks.register('remapR30ProbeJar', net.fabricmc.loom.task.RemapJarTask) {
     classpath.setFrom(sourceSets.r30Probe.compileClasspath)
     addNestedDependencies.set(false)
     archiveBaseName.set('skybox-validation-probe')
-    archiveVersion.set('r34.2')
+    archiveVersion.set('r36')
     archiveClassifier.set('')
 }

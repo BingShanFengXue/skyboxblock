@@ -43,6 +43,7 @@ public final class R30TemporalCapture {
         metadata.add("viewColumnMajor",GSON.toJsonTree(frame.view.get(new float[16])));
         metadata.addProperty("irisFinalHook",frame.irisFinalHook);metadata.addProperty("finalResolveCount",frame.finalResolveCount);
         metadata.addProperty("image",file+".png");
+        metadata.add("cloudDiagnostics",R36CloudDiagnostics.capture(frame,directory,file));
         for(String fieldName:new String[]{"distantDepthEnabled","distantDepthTexture","distantOpaqueReady","distantHdrReady","edgeHistoryUsed","edgeHistoryFrames","geometrySignature"}) {
             try { metadata.add(fieldName,GSON.toJsonTree(frame.getClass().getField(fieldName).get(frame))); }
             catch(NoSuchFieldException absent) { metadata.addProperty(fieldName+"Available",false); }
@@ -63,6 +64,6 @@ public final class R30TemporalCapture {
         out.addProperty("overhead","Synchronous GPU color readback, bounded asynchronous PNG compression; frame pacing and jitter bits are recorded, no unprofiled FPS claim");return out;
     }
     public static void close() throws Exception {
-        finish();WRITER.shutdown();if(!WRITER.awaitTermination(60,TimeUnit.SECONDS))throw new IllegalStateException("Temporal writer did not stop");
+        finish();R36CloudDiagnostics.release();WRITER.shutdown();if(!WRITER.awaitTermination(60,TimeUnit.SECONDS))throw new IllegalStateException("Temporal writer did not stop");
     }
 }

@@ -36,6 +36,29 @@ final class SkyVanillaGeometry {
         out[at++]=(int)(c[2]*255F)/255F; out[at++]=(int)(alpha*255F)/255F;
         return at;
     }
+    /** Fog-colored dome with a smooth +/-6-degree horizon edge; depth state remains caller-owned. */
+    static float[] occluder(float red,float green,float blue) {
+        int slices=32,bands=16;
+        float[] data=new float[slices*bands*6*7];
+        float[] color={red,green,blue,1F}; int at=0;
+        for(int band=0;band<bands;band++) {
+            float e0=(float)Math.toRadians(-90+96F*band/bands);
+            float e1=(float)Math.toRadians(-90+96F*(band+1)/bands);
+            for(int slice=0;slice<slices;slice++) {
+                float a0=(float)(slice*Math.PI*2/slices),a1=(float)((slice+1)*Math.PI*2/slices);
+                at=domeVertex(data,at,e0,a0,color); at=domeVertex(data,at,e1,a0,color);
+                at=domeVertex(data,at,e1,a1,color); at=domeVertex(data,at,e0,a0,color);
+                at=domeVertex(data,at,e1,a1,color); at=domeVertex(data,at,e0,a1,color);
+            }
+        }
+        return data;
+    }
+    private static int domeVertex(float[] out,int at,float elevation,float azimuth,float[] color) {
+        float y=(float)Math.sin(elevation),radius=(float)Math.cos(elevation);
+        float edge=(float)Math.sin(Math.toRadians(6));
+        return vertex(out,at,64F*radius*(float)Math.cos(azimuth),64F*y,
+                64F*radius*(float)Math.sin(azimuth),color,SkyEnvironmentMath.visibility(y,-edge,edge));
+    }
     static float[] celestial(float size,float y,boolean moon,float u0,float v0,float u1,float v1) {
         float z0=moon ? size : -size,z1=-z0;
         if(moon) { float t=u0;u0=u1;u1=t;t=v0;v0=v1;v1=t; }

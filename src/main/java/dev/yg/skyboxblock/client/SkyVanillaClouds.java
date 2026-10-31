@@ -1,5 +1,7 @@
 package dev.yg.skyboxblock.client;
 
+import dev.yg.skyboxblock.SkyEnvironment;
+
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.MeshData;
@@ -170,12 +172,16 @@ public final class SkyVanillaClouds {
                                  SkyDisplayState displaySky) {
         Minecraft mc = Minecraft.getInstance();
         if (DIAGNOSTICS) clearDiagnostics();
-        if (shader == null || level == null || !SkyboxConfig.get().clouds()) return false;
+        if (shader == null || level == null || !SkyboxConfig.get().clouds() || displaySky.cloudOpacity<=0F) return false;
+        SkyEnvironment env=displaySky.environment;
+        float fadeEnd=SkyEnvironmentMath.cloudEnd(env,SkyboxConfig.get().vanillaCloudFadeEnd());
+        float fadeStart=SkyEnvironmentMath.cloudStart(env,SkyboxConfig.get().vanillaCloudFadeStart(),fadeEnd);
         CloudMeshAccess access = (CloudMeshAccess) renderer;
         double animation = Boolean.getBoolean("skyboxblock.regression.freezeClouds")
                 && Boolean.getBoolean("skyboxblock.regression") ? 0 : (level.getGameTime() + (double)partialTick) * .03;
         double x = (cameraPos.x + animation) / 12.0;
-        double y = SkyRenderMath.cloudRelativeY(cameraPos.y, SkyboxConfig.get().vanillaCloudHeight());
+        double y = SkyRenderMath.cloudRelativeY(cameraPos.y,
+                SkyEnvironmentMath.cloudHeight(env,SkyboxConfig.get().vanillaCloudHeight()));
         double z = cameraPos.z / 12.0 + .33000001311302185;
         x -= Math.floor(x / 2048) * 2048;
         z -= Math.floor(z / 2048) * 2048;
@@ -188,7 +194,7 @@ public final class SkyVanillaClouds {
             try {
                 // buildClouds only reads this field; restore it before vanilla/Sodium resumes.
                 access.skyboxblock$setCloudType(CloudStatus.FANCY);
-                try(SkyCloudRange.Scope range=SkyCloudRange.build(SkyboxConfig.get().vanillaCloudFadeEnd())) {
+                try(SkyCloudRange.Scope range=SkyCloudRange.build(fadeEnd)) {
                     mesh = access.skyboxblock$buildClouds(Tesselator.getInstance(), x, y, z, color);
                 }
             } finally {
@@ -229,24 +235,26 @@ public final class SkyVanillaClouds {
         SkyGlState.bindTexture(texture);
         if (DIAGNOSTICS) lastTextureId = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         RenderSystem.setShaderTexture(0, texture);
-        if (shader.getUniform("CloudFogStart") != null) shader.getUniform("CloudFogStart").set(SkyboxConfig.get().vanillaCloudFadeStart());
-        if (shader.getUniform("CloudFogEnd") != null) shader.getUniform("CloudFogEnd").set(SkyboxConfig.get().vanillaCloudFadeEnd());
+        if (shader.getUniform("CloudFogStart") != null) shader.getUniform("CloudFogStart").set(fadeStart);
+        if (shader.getUniform("CloudFogEnd") != null) shader.getUniform("CloudFogEnd").set(fadeEnd);
+        if (shader.getUniform("CloudOpacity") != null) shader.getUniform("CloudOpacity").set(displaySky.cloudOpacity);
         RenderSystem.setShader(() -> shader);
         if (LEGACY_BUFFER) buffer.bind();
-        // Same depth-only then color structure as vanilla fancy clouds; transparent texels discard
-        // in both passes, so neither empty cells nor hidden cloud layers occlude the sky.
-        RenderSystem.colorMask(false, false, false, false);
-        GL11.glColorMask(false, false, false, false);
-        drawPass(modelView, SkyCloudRange.projection(projection,SkyboxConfig.get().vanillaCloudFadeEnd()));
-        RenderSystem.colorMask(true, true, true, true);
-        GL11.glColorMask(true, true, true, true);
-        RenderSystem.depthMask(false);
-        GL11.glDepthMask(false);
-        RenderSystem.enableBlend();
-        GL11.glEnable(GL11.GL_BLEND);
-        GlStateManager._blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA,
-                GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        drawPass(modelView, SkyCloudRange.projection(projection,SkyboxConfig.get().vanillaCloudFadeEnd()));
+        // Native cloud planes intersect at tiny offsets. Quantized equal-depth fragments must not
+        // repeatedly alpha-blend at those intersections. Only the private color pass uses stencil.
+        try(SkyCloudStencil.Scope stencil=SkyCloudStencil.save()) {
+            RenderSystem.colorMask(false, false, false, false);
+            GL11.glColorMask(false, false, false, false);
+            drawPass(modelView, SkyCloudRange.projection(projection,fadeEnd));
+            RenderSystem.colorMask(true, true, true, true);
+            GL11.glColorMask(true, true, true, true);
+            RenderSystem.depthMask(false);GL11.glDepthMask(false);
+            RenderSystem.enableBlend();GL11.glEnable(GL11.GL_BLEND);
+            GlStateManager._blendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA,
+                    GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            stencil.color();
+            drawPass(modelView, SkyCloudRange.projection(projection,fadeEnd));
+        }
         VertexBuffer.unbind();
         renderedFrames++;
         return true;

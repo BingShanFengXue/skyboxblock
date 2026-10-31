@@ -35,6 +35,7 @@ public final class R30Probe implements ClientModInitializer {
     private static JsonObject plan,current,serverEvidence;
     private static JsonArray phases,completed=new JsonArray();
     private static int phase=-1,finishTicks,ticks,releaseSequence,temporalSourceFrames;
+    private static long lastTemporalGameTick=Long.MIN_VALUE;
     private static long phaseStart,lastFrame,lastTransaction=-1,nextSample,measurementStart,measurementEnd;
     private static long[] intervals=new long[16384];
     private static int frameCount,minimumBlocks=Integer.MAX_VALUE,maximumBlocks;
@@ -46,6 +47,7 @@ public final class R30Probe implements ClientModInitializer {
     private static final ArrayList<BlockPos> placed=new ArrayList<>(); // server thread only
 
     @Override public void onInitializeClient() {
+        if(Boolean.getBoolean("skyboxblock.r36.multiplayerProbe")) R36MultiplayerProbe.initialize();
         if (!REQUESTED) return;
         try {
             Minecraft mc=Minecraft.getInstance();
@@ -106,8 +108,14 @@ public final class R30Probe implements ClientModInitializer {
             if(!clientCommandsDone) {
                 clientCommandsDone=true;
                 if(current.has("clientCommands")) for(JsonElement command:current.getAsJsonArray("clientCommands")) {
-                    int value=clientCommand(mc,command.getAsString());
-                    JsonObject outcome=new JsonObject(); outcome.addProperty("command",command.getAsString()); outcome.addProperty("result",value); clientCommandResults.add(outcome);
+                    JsonObject outcome=new JsonObject(); outcome.addProperty("command",command.getAsString());
+                    int value;
+                    try { value=clientCommand(mc,command.getAsString()); }
+                    catch(com.mojang.brigadier.exceptions.CommandSyntaxException invalid) {
+                        if(!bool(current,"allowFailedClientCommand",false)) throw invalid;
+                        value=0; outcome.addProperty("syntaxError",invalid.getMessage());
+                    }
+                    outcome.addProperty("result",value); clientCommandResults.add(outcome);
                     if(value!=1 && !bool(current,"allowFailedClientCommand",false)) throw new IllegalStateException("Client command failed: "+command);
                 }
             }
@@ -136,7 +144,7 @@ public final class R30Probe implements ClientModInitializer {
         minimumBlocks=Integer.MAX_VALUE; maximumBlocks=0; measuredVertices=0;
         reloadStarted=false; captureNext=false; serverEvidence=null;
         clientCommandsDone=false; clientCommandResults=new JsonArray();
-        temporalSourceFrames=0; R30TemporalCapture.begin();
+        temporalSourceFrames=0;lastTemporalGameTick=Long.MIN_VALUE;R30TemporalCapture.begin();
         yaw=(float)num(current,"yaw",0); pitch=(float)num(current,"pitch",0);
         if (current.has("width")) GLFW.glfwSetWindowSize(mc.getWindow().getWindow(),current.get("width").getAsInt(),current.get("height").getAsInt());
         var server=mc.getSingleplayerServer();
@@ -157,11 +165,21 @@ public final class R30Probe implements ClientModInitializer {
             String material=str(selected,"material","sky");
             BlockState block=switch(material) { case "sky" -> SkyboxBlockMod.SKY_BLOCK.defaultBlockState();
                 case "stone" -> Blocks.STONE.defaultBlockState(); case "air" -> Blocks.AIR.defaultBlockState();
-                default -> throw new IllegalArgumentException("Unknown material "+material); };
+                default -> {
+                    var id=net.minecraft.resources.ResourceLocation.tryParse(material);
+                    if(id==null || !net.minecraft.core.registries.BuiltInRegistries.BLOCK.containsKey(id))
+                        throw new IllegalArgumentException("Unknown material "+material);
+                    yield net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(id).defaultBlockState();
+                } };
             int px=(int)Math.floor(x)-w/2,py=(int)Math.floor(y)+1-h/2,pz=(int)Math.floor(z)+(int)num(selected,"panelDistance",12);
+            int quadrant=bool(selected,"orientPanel",false) ? Math.floorMod((int)Math.round(num(selected,"yaw",0)/90.0),4) : 0;
+            int distance=(int)num(selected,"panelDistance",12);
+            if(quadrant==1 || quadrant==3) { px=(int)Math.floor(x)+(quadrant==1 ? -distance : distance); pz=(int)Math.floor(z)-w/2; }
+            else if(quadrant==2) pz=(int)Math.floor(z)-distance;
             int actual=0;
             if(!preserve) for(int dx=0;dx<w;dx++) for(int dy=0;dy<h;dy++) {
-                BlockPos pos=new BlockPos(px+dx,py+dy,pz); level.setBlock(pos,block,3); placed.add(pos);
+                BlockPos pos=(quadrant==1 || quadrant==3) ? new BlockPos(px,py+dy,pz+dx) : new BlockPos(px+dx,py+dy,pz);
+                level.setBlock(pos,block,3); placed.add(pos);
             }
             for(BlockPos pos:placed) if(level.getBlockState(pos).is(block.getBlock())) actual++;
             JsonArray commandResults=new JsonArray();
@@ -170,13 +188,26 @@ public final class R30Probe implements ClientModInitializer {
                 JsonObject outcome=new JsonObject(); outcome.addProperty("command",command.getAsString());
                 outcome.addProperty("submitted",true); outcome.addProperty("outcomeNotInferred",true); commandResults.add(outcome);
             }
+            JsonArray settingResults=new JsonArray();
+            if(selected.has("settingCommands")) for(JsonElement command:selected.getAsJsonArray("settingCommands")) {
+                JsonObject outcome=new JsonObject();outcome.addProperty("command",command.getAsString());
+                int result;
+                try { result=server.getCommands().getDispatcher().execute(command.getAsString(),
+                        server.createCommandSourceStack().withPermission(4).withSuppressedOutput()); }
+                catch(com.mojang.brigadier.exceptions.CommandSyntaxException invalid) {
+                    result=0;outcome.addProperty("syntaxError",invalid.getMessage());
+                }
+                outcome.addProperty("result",result);settingResults.add(outcome);
+                if(result!=1 && !bool(selected,"allowFailedSettingCommand",false))
+                    throw new IllegalStateException("Server setting command failed: "+command);
+            }
             JsonArray blockProbes=new JsonArray();
             if(selected.has("blockProbes")) for(JsonElement request:selected.getAsJsonArray("blockProbes")) {
                 JsonArray pos=request.getAsJsonArray(); BlockPos bp=new BlockPos(pos.get(0).getAsInt(),pos.get(1).getAsInt(),pos.get(2).getAsInt());
                 JsonObject observed=new JsonObject(); observed.add("position",pos.deepCopy());
                 observed.addProperty("block",net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(level.getBlockState(bp).getBlock()).toString()); blockProbes.add(observed);
             }
-            JsonObject evidence=new JsonObject(); evidence.add("commandResults",commandResults); evidence.add("blockProbes",blockProbes); evidence.addProperty("material",material); evidence.addProperty("requestedPanelBlocks",preserve ? placed.size() : w*h);
+            JsonObject evidence=new JsonObject(); evidence.add("commandResults",commandResults);evidence.add("settingCommandResults",settingResults); evidence.add("blockProbes",blockProbes); evidence.addProperty("material",material); evidence.addProperty("requestedPanelBlocks",preserve ? placed.size() : w*h);
             evidence.addProperty("preservedPanel",preserve);
             if(preserve && !placed.isEmpty()) { px=placed.getFirst().getX(); py=placed.getFirst().getY(); pz=placed.getFirst().getZ(); }
             evidence.addProperty("actualServerPanelBlocks",actual); evidence.addProperty("originX",px); evidence.addProperty("originY",py);
@@ -231,8 +262,13 @@ public final class R30Probe implements ClientModInitializer {
             int requestedFrames=(int)num(current,"captureFrames",0);
             if(requestedFrames<0 || requestedFrames>240) throw new IllegalArgumentException("Temporal frame bound 0..240");
             int interval=Math.max(1,(int)num(current,"captureEveryFrames",3));
-            if(now>=measurementStart && now<measurementEnd && requestedFrames>0 && R30TemporalCapture.captured()<requestedFrames
-                    && temporalSourceFrames++%interval==0) R30TemporalCapture.capture(frame,output,stem());
+            if(now>=measurementStart && now<measurementEnd && requestedFrames>0 && R30TemporalCapture.captured()<requestedFrames) {
+                long gameTick=frame.level.getGameTime();
+                int tickInterval=(int)num(current,"captureEveryGameTicks",0);
+                boolean due=tickInterval>0 ? lastTemporalGameTick==Long.MIN_VALUE || gameTick-lastTemporalGameTick>=tickInterval
+                        : temporalSourceFrames++%interval==0;
+                if(due) { R30TemporalCapture.capture(frame,output,stem());lastTemporalGameTick=gameTick; }
+            }
             if(now>=measurementEnd) {
                 if(!R34EdgeStages.complete(frame)) return;
                 finishPhase(mc,frame); stageDone=true; lastFrame=0;
@@ -249,6 +285,7 @@ public final class R30Probe implements ClientModInitializer {
         result.add("frameTimeMilliseconds",distribution()); result.add("resources",ResourceFootprint.snapshot()); result.add("memory",memory());
         result.add("gpuLifetime",R30GpuLifetime.snapshot(true)); result.add("clientCommandResults",clientCommandResults.deepCopy());
         result.add("cloudState",cloudState()); result.add("temporalCapture",R30TemporalCapture.finish());
+        result.add("environmentState",environmentState(frame));
         result.addProperty("width",mc.getWindow().getWidth()); result.addProperty("height",mc.getWindow().getHeight());
         result.addProperty("rasterScaleX",frame.rasterScale.x); result.addProperty("rasterScaleY",frame.rasterScale.y);
         result.addProperty("actualActiveWidth",frame.viewport[2]); result.addProperty("actualActiveHeight",frame.viewport[3]);
@@ -297,6 +334,54 @@ public final class R30Probe implements ClientModInitializer {
         LOG.info("[r30-probe] CAPTURED {} frames={} blocks={}..{}",name(),frameCount,result.get("minimumCollectedBlocks"),maximumBlocks);
     }
 
+    /** Read actual production snapshots/uniforms; remains compatible with the frozen R34.2 control. */
+    private static JsonObject environmentState(SkyWorldRenderer.Frame frame) throws Exception {
+        JsonObject out=new JsonObject();
+        if(frame.sky==null) return out;
+        for(String name:new String[]{"skyColor","fogColor","cloudColor","sunrise","starBrightness","moonPhase","phase","rain","cloudOpacity"}) {
+            try { out.add(name,new Gson().toJsonTree(frame.sky.getClass().getField(name).get(frame.sky))); }
+            catch(NoSuchFieldException absent) { out.addProperty(name+"Available",false); }
+        }
+        Object config=Class.forName("dev.yg.skyboxblock.client.SkyboxConfig").getMethod("get").invoke(null);
+        try {
+            Object env=config.getClass().getMethod("environment").invoke(config);
+            JsonObject configured=new JsonObject();
+            for(String id:new String[]{"sky_color","fog_color","cloud_color","sunrise_sunset_color","fog_start_distance",
+                    "fog_end_distance","sky_fog_end_distance","cloud_height","cloud_fog_end_distance",
+                    "sun_angle","moon_angle","star_angle","star_brightness","moon_phase","has_sky_occluder"}) {
+                boolean has=(boolean)env.getClass().getMethod("has",String.class).invoke(env,id);
+                if(!has) { configured.addProperty(id,"auto"); continue; }
+                Object value;
+                if(id.endsWith("color")) value=env.getClass().getMethod("color",String.class,int.class).invoke(env,id,0);
+                else if(id.equals("moon_phase")) value=env.getClass().getMethod("moonPhase",int.class).invoke(env,0);
+                else if(id.equals("has_sky_occluder")) value=env.getClass().getMethod("flag",String.class,boolean.class).invoke(env,id,false);
+                else value=env.getClass().getMethod("number",String.class,float.class).invoke(env,id,0F);
+                configured.add(id,new Gson().toJsonTree(value));
+            }
+            out.add("configured",configured);
+        } catch(NoSuchMethodException absent) { out.addProperty("environmentApiAvailable",false); }
+        JsonObject gpu=new JsonObject();
+        var field=Class.forName("dev.yg.skyboxblock.client.VanillaSkyScene").getDeclaredField("background");
+        field.setAccessible(true);
+        if(field.get(null) instanceof net.minecraft.client.renderer.ShaderInstance shader) {
+            for(String name:new String[]{"FogStart","FogEnd"}) {
+                int location=org.lwjgl.opengl.GL20.glGetUniformLocation(shader.getId(),name);
+                if(location>=0) gpu.addProperty(name,org.lwjgl.opengl.GL20.glGetUniformf(shader.getId(),location));
+            }
+        }
+        out.add("backgroundGpu",gpu);
+        var starField=Class.forName("dev.yg.skyboxblock.client.VanillaSkyScene").getDeclaredField("stars");
+        starField.setAccessible(true);
+        if(starField.get(null) instanceof net.minecraft.client.renderer.ShaderInstance shader) {
+            int location=org.lwjgl.opengl.GL20.glGetUniformLocation(shader.getId(),"DrawColor");
+            if(location>=0) {
+                var buffer=org.lwjgl.BufferUtils.createFloatBuffer(4);
+                org.lwjgl.opengl.GL20.glGetUniformfv(shader.getId(),location,buffer);
+                float[] values=new float[4];buffer.get(values);out.add("starsGpuDrawColor",new Gson().toJsonTree(values));
+            }
+        }
+        return out;
+    }
     private static int clientCommand(Minecraft mc,String command) throws Exception {
         var dispatcher=net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.getActiveDispatcher();
         if(dispatcher==null || mc.getConnection()==null) throw new IllegalStateException("Client command dispatcher unavailable");
@@ -315,7 +400,7 @@ public final class R30Probe implements ClientModInitializer {
         var field=renderer.getDeclaredField("shader"); field.setAccessible(true);
         if(field.get(null) instanceof net.minecraft.client.renderer.ShaderInstance shader) {
             int program=shader.getId(); out.addProperty("program",program);
-            for(String name:new String[]{"CloudFogStart","CloudFogEnd"}) {
+            for(String name:new String[]{"CloudFogStart","CloudFogEnd","CloudOpacity"}) {
                 int location=org.lwjgl.opengl.GL20.glGetUniformLocation(program,name);
                 if(location>=0) out.addProperty(name,org.lwjgl.opengl.GL20.glGetUniformf(program,location));
             }
@@ -329,8 +414,9 @@ public final class R30Probe implements ClientModInitializer {
         if(Files.exists(file)) {
             Properties properties=new Properties(); try(var stream=Files.newInputStream(file)) { properties.load(stream); }
             JsonObject saved=new JsonObject();
-            for(String key:new String[]{"vanillaCloudHeight","vanillaCloudFadeStart","vanillaCloudFadeEnd","clouds"})
-                if(properties.containsKey(key)) saved.addProperty(key,properties.getProperty(key));
+            for(String key:properties.stringPropertyNames())
+                if(key.startsWith("environment.") || java.util.Set.of("vanillaCloudHeight","vanillaCloudFadeStart","vanillaCloudFadeEnd","clouds").contains(key))
+                    saved.addProperty(key,properties.getProperty(key));
             out.add("persistedProperties",saved);
         }
         return out;
