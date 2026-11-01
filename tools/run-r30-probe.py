@@ -18,6 +18,9 @@ def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def write_new(path,value):
     with Path(path).open('x',encoding='utf-8') as stream: json.dump(value,stream,indent=2,ensure_ascii=False); stream.write('\n')
 
+def prepare_fixture(instance,config):
+    """Overridable hook: a derived runner may add files before the client starts."""
+
 def phases(mode,warmup,sample,cycles,hold):
     def phase(name,w=0,h=0,**extra):
         return dict(name=name,panelWidth=w,panelHeight=h,warmupSeconds=warmup,sampleSeconds=sample,**extra)
@@ -107,6 +110,7 @@ def main(argv=None):
     selected=base.prepare_mods(instance,a.profile,jar); shutil.copy2(probe,instance/'mods'/probe.name)
     assert not any(m['id']=='immersive_portals' for m in selected)
     config=instance/'config'; config.mkdir()
+    prepare_fixture(instance,config)
     (instance/'options.txt').write_text('version:3955\nenableVsync:false\nmaxFps:'+str(a.max_fps)+'\npauseOnLostFocus:false\nrenderDistance:'+str(a.render_distance)+'\nsimulationDistance:5\nguiScale:2\nlang:en_us\nbobView:false\nrenderClouds:"false"\nresourcePacks:[]\nonboardAccessibility:false\ntutorialStep:none\n',encoding='utf-8')
     dh_config={}
     if a.profile in {'dh','iris-dh'}:

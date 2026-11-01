@@ -217,7 +217,10 @@ public final class ServerCommandRegression {
     private static void walk(CommandNode<CommandSourceStack> node, List<String> problems, String path) {
         if (node instanceof ArgumentCommandNode<CommandSourceStack, ?> argument) {
             ArgumentType<?> type = argument.getType();
-            boolean builtIn = type instanceof ResourceLocationArgument || type instanceof StringArgumentType;
+            // EntityArgument is vanilla and serialisable (minecraft:entity), so the per-player
+            // subtree survives ClientboundCommandsPacket exactly like the attribute node does.
+            boolean builtIn = type instanceof ResourceLocationArgument || type instanceof StringArgumentType
+                    || type instanceof net.minecraft.commands.arguments.EntityArgument;
             if (!builtIn) problems.add(path + " -> " + type.getClass().getName());
         } else if (!(node instanceof RootCommandNode || node instanceof LiteralCommandNode)) {
             problems.add(path + " -> " + node.getClass().getName());

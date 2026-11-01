@@ -82,8 +82,165 @@ public final class SkyboxServerCommands {
         dispatcher.register(Commands.literal("skyboxblock")
                 .executes(context -> usage(context.getSource()))
                 .then(environmentNode(ENVIRONMENT))
-                .then(environmentNode(ENVIRONMENT_ALIAS)));
+                .then(environmentNode(ENVIRONMENT_ALIAS))
+                .then(playerNode()));
         return dispatcher;
+    }
+
+    // ── per-player scope ──────────────────────────────────────────────────────────────────
+
+    /**
+     * {@code /skyboxblock player <targets> ...}: the same attribute surface as the global commands,
+     * but written into the player's own scope. Kept to literals plus vanilla arguments so the tree
+     * stays serialisable for {@code ClientboundCommandsPacket}.
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> playerNode() {
+        var attribute = attributeNode(context -> playerGet(context.getSource(), attribute(context)));
+        return Commands.literal("player")
+                .requires(SkyboxServerCommands::canMutate)
+                .then(Commands.argument("targets", net.minecraft.commands.arguments.EntityArgument.players())
+                        .then(Commands.literal("show").executes(context ->
+                                playerShow(context.getSource(), targets(context))))
+                        .then(Commands.literal("reset")
+                                .then(Commands.literal("all").executes(context ->
+                                        playerResetAll(context.getSource(), targets(context))))
+                                .then(attributeNode(context -> playerReset(context.getSource(),
+                                        targets(context), attribute(context)))))
+                        .then(Commands.literal("set")
+                                .then(attributeNode(context -> missingValue(context.getSource(), attribute(context)))
+                                        .then(valueNode().executes(context -> playerSet(context.getSource(),
+                                                targets(context), attribute(context), value(context))))))
+                        .then(Commands.literal(TIME)
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument(VALUE, StringArgumentType.greedyString())
+                                                .executes(context -> playerTimeSet(context.getSource(),
+                                                        targets(context), value(context)))))
+                                .then(Commands.literal("reset").executes(context ->
+                                        playerTimeReset(context.getSource(), targets(context)))))
+                        // Same shorthand as the global node: bare attribute reads, attribute + value sets.
+                        .then(attributeNode(context -> playerShowAttribute(context.getSource(),
+                                        targets(context), attribute(context)))
+                                .then(valueNode().executes(context -> playerSet(context.getSource(),
+                                        targets(context), attribute(context), value(context))))));
+    }
+
+    /** Brigadier already validated the selector, so a resolution failure is a programming error. */
+    private static java.util.List<net.minecraft.server.level.ServerPlayer> targets(
+            com.mojang.brigadier.context.CommandContext<CommandSourceStack> context) {
+        try {
+            return java.util.List.copyOf(net.minecraft.commands.arguments.EntityArgument.getPlayers(context, "targets"));
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException error) {
+            throw new IllegalStateException("targets selector did not resolve", error);
+        }
+    }
+
+    private static int playerShow(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players) {
+        var store = store(source);
+        for (var player : players) {
+            var effective = store.settingsFor(player.getUUID());
+            source.sendSuccess(() -> Component.literal(player.getGameProfile().getName() + "："
+                    + (store.hasOverride(player.getUUID()) ? "有独立覆盖" : "跟随服务器")
+                    + "，revision " + effective.revision()), false);
+        }
+        return players.size();
+    }
+
+    private static int playerSet(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players,
+                                 SkyEnvironment.Attribute attribute, String raw) {
+        var store = store(source);
+        for (var player : players) {
+            try {
+                store.setPlayerEnvironment(player.getUUID(), attribute.id(), raw);
+            } catch (IOException error) {
+                return failure(source, message(error));
+            } catch (IllegalArgumentException invalid) {
+                return failure(source, "无效值：" + invalid.getMessage());
+            }
+        }
+        return success(source, "已为 " + players.size() + " 名玩家设置 " + attribute.id() + " = " + raw);
+    }
+
+    private static int playerReset(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players,
+                                   SkyEnvironment.Attribute attribute) {
+        var store = store(source);
+        for (var player : players) {
+            try {
+                store.resetPlayerEnvironment(player.getUUID(), attribute.id());
+            } catch (IOException error) {
+                return failure(source, message(error));
+            } catch (IllegalArgumentException invalid) {
+                return failure(source, "无效值：" + invalid.getMessage());
+            }
+        }
+        return success(source, "已为 " + players.size() + " 名玩家清除 " + attribute.id());
+    }
+
+    private static int playerResetAll(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players) {
+        var store = store(source);
+        for (var player : players) {
+            try {
+                store.resetPlayerAll(player.getUUID());
+            } catch (IOException error) {
+                return failure(source, message(error));
+            }
+        }
+        return success(source, "已清除 " + players.size() + " 名玩家的全部覆盖");
+    }
+
+    private static int playerTimeSet(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players,
+                                     String raw) {
+        int ticks;
+        try {
+            ticks = Integer.parseInt(raw.trim());
+            if (ticks < 0 || ticks > 24000) throw new NumberFormatException();
+        } catch (NumberFormatException error) {
+            return failure(source, "tick 必须是 0–24000 的整数：" + raw);
+        }
+        var store = store(source);
+        long now = SkyboxServerConfig.gameTime(source);
+        for (var player : players) {
+            try {
+                store.setPlayerTime(player.getUUID(), ticks, now);
+            } catch (IOException | IllegalArgumentException error) {
+                return failure(source, message(error));
+            }
+        }
+        return success(source, "已为 " + players.size() + " 名玩家设置天空时间 " + ticks);
+    }
+
+    private static int playerTimeReset(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players) {
+        var store = store(source);
+        for (var player : players) {
+            try {
+                store.resetPlayerEnvironment(player.getUUID(), "skybox.time");
+            } catch (IOException error) {
+                return failure(source, message(error));
+            } catch (IllegalArgumentException notAnEnvironmentAttribute) {
+                return failure(source, "该版本暂不支持按玩家重置时间，请用 reset all");
+            }
+        }
+        return success(source, "已为 " + players.size() + " 名玩家清除时间覆盖");
+    }
+
+    private static int playerGet(CommandSourceStack source, SkyEnvironment.Attribute attribute) {
+        if (source.getEntity() instanceof net.minecraft.server.level.ServerPlayer self)
+            return playerShowAttribute(source, java.util.List.of(self), attribute);
+        return failure(source, "该指令需要玩家执行；请使用 /skyboxblock player <targets> <属性>");
+    }
+
+    /** Prints one attribute for every target, marking whether it comes from a player override. */
+    private static int playerShowAttribute(CommandSourceStack source,
+                                           java.util.List<net.minecraft.server.level.ServerPlayer> players,
+                                           SkyEnvironment.Attribute attribute) {
+        var store = store(source);
+        for (var player : players) {
+            var settings = store.settingsFor(player.getUUID());
+            String value = effective(settings.environment(), attribute);
+            String scope = store.hasOverride(player.getUUID()) ? "（玩家覆盖）" : "（跟随服务器）";
+            source.sendSuccess(() -> Component.literal(player.getGameProfile().getName() + "："
+                    + attribute.id() + " = " + value + scope), false);
+        }
+        return players.size();
     }
 
     // ── tree ──────────────────────────────────────────────────────────────────────────────

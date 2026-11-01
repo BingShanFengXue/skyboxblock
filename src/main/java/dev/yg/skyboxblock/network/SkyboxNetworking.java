@@ -24,7 +24,7 @@ public final class SkyboxNetworking {
         ServerLifecycleEvents.SERVER_STARTED.register(SkyboxServerConfig::get);
         ServerLifecycleEvents.SERVER_STOPPED.register(SkyboxServerConfig::release);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-                send(handler.player, SkyboxServerConfig.get(server).settings()));
+                send(handler.player, SkyboxServerConfig.get(server).forSend(handler.player.getUUID())));
         registered = true;
         // Deliberately NO playC2S registration: mutations use the OP2 server command tree.
     }

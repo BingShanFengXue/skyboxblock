@@ -11,6 +11,8 @@ public final class SkyboxBlockClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
         BlockEntityRendererRegistry.register(SkyboxBlockMod.SKY_BLOCK_ENTITY, SkyBlockEntityRenderer::new);
         SkyboxServerState.register();
+        CustomSkyCommand.register();
+        registerCustomStylePack();
         if(ModCompat.DISTANT_HORIZONS) {
             try { DistantSkyDepth.register(); }
             catch(RuntimeException | LinkageError error) { SkyboxBlockMod.LOGGER.warn("[skyboxblock] optional DH render event adapter unavailable",error); }
@@ -37,5 +39,13 @@ public final class SkyboxBlockClient implements ClientModInitializer {
                 client -> SkyWorldRenderer.release());
         if (SeamScan.enabled()) SeamScan.register(); else RenderRegression.register();
         SkyboxBlockMod.LOGGER.info("[skyboxblock] independent vanilla simulation initialized ({})", ModCompat.describe());
+    }
+
+    /**
+     * Serves the generated blockstates, models and panoramas straight from the studio folder.
+     * Without this the custom blocks would exist in the registry but render as missing models.
+     */
+    private static void registerCustomStylePack() {
+        CustomSkyPacks.install();
     }
 }

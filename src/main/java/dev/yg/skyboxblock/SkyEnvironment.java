@@ -74,8 +74,8 @@ public final class SkyEnvironment {
         /** One-line help shown by {@code environment list} / {@code environment get}. */
         public String help() {
             return switch (kind) {
-                case RGB -> "RGB 颜色： #RRGGBB（6 位，必须带 #）";
-                case ARGB -> "ARGB 颜色： #AARRGGBB（8 位，必须带 #，保留 alpha 与符号位）";
+                case RGB -> "颜色： #RRGGBB 或 #AARRGGBB（6 位或 8 位，必须带 #；该属性不用 alpha，写 8 位时忽略前两位）";
+                case ARGB -> "颜色： #RRGGBB 或 #AARRGGBB（6 位或 8 位，必须带 #；写 6 位时 alpha 视为 FF）";
                 case FLAG -> "布尔： true / false";
                 case PHASE -> "月相： " + String.join(" / ", MOON_PHASES) + "，或 0..7";
                 case NUMBER -> "浮点：" + (positive() ? range() : formatNumber(min) + " .. " + formatNumber(max));
@@ -211,7 +211,12 @@ public final class SkyEnvironment {
         }
     }
 
-    /** Parses one colour token. Only the {@code #RRGGBB}/{@code #AARRGGBB} form is accepted. */
+    /**
+     * Parses one colour token. Every colour attribute accepts both {@code #RRGGBB} and
+     * {@code #AARRGGBB}, so the user never has to remember which attribute carries alpha:
+     * a six-digit value into an alpha attribute becomes opaque, and the alpha of an eight-digit
+     * value into an RGB-only attribute is dropped because that attribute has nowhere to put it.
+     */
     private static String canonicalColor(Attribute attribute, String text) {
         if (text.startsWith("0x") || text.startsWith("0X"))
             throw new InvalidValueException(attribute.id() + " 只接受 # 开头的十六进制颜色码，收到 "
@@ -220,20 +225,21 @@ public final class SkyEnvironment {
         if (text.startsWith("#")) digits = text.substring(1);
         else throw new InvalidValueException(attribute.id() + " 只接受 # 开头的十六进制颜色码，收到 "
                 + text + "（例如 " + expectedSample(attribute) + "）");
-        int expected = attribute.kind() == Kind.ARGB ? 8 : 6;
-        if (digits.length() != expected)
-            throw new InvalidValueException(attribute.id() + " 需要 # 加 " + expected + " 位十六进制，收到 "
-                    + digits.length() + " 位（例如 " + expectedSample(attribute) + "）");
         for (int i = 0; i < digits.length(); i++) {
             if (Character.digit(digits.charAt(i), 16) < 0)
                 throw new InvalidValueException(attribute.id() + " 含非十六进制字符：" + digits.charAt(i));
         }
+        if (digits.length() != 6 && digits.length() != 8)
+            throw new InvalidValueException(attribute.id() + " 需要 # 加 6 位或 8 位十六进制，收到 "
+                    + digits.length() + " 位（例如 " + expectedSample(attribute) + "）");
+        if (digits.length() == 8 && attribute.kind() == Kind.RGB) digits = digits.substring(2);
+        if (digits.length() == 6 && attribute.kind() == Kind.ARGB) digits = "FF" + digits;
         return "#" + digits.toUpperCase(Locale.ROOT);
     }
 
-    /** A canonical example in the only accepted colour form. */
+    /** A canonical example, showing that both colour lengths are accepted. */
     private static String expectedSample(Attribute attribute) {
-        return attribute.kind() == Kind.ARGB ? "#FFAABBCC" : "#AABBCC";
+        return attribute.kind() == Kind.ARGB ? "#FFAABBCC 或 #AABBCC" : "#AABBCC 或 #FFAABBCC";
     }
 
     private static String canonicalNumber(Attribute attribute, String text) {

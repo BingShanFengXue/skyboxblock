@@ -4,7 +4,9 @@
   "package": "dev.yg.skyboxblock.mixin",
   "refmap": "skyboxblock-refmap.json",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["RegressionFluidMixin"],
+  "mixins": [
+    "RegressionFluidMixin"
+  ],
   "client": [
     "LevelRendererMixin",
     "BufferSourceMixin",
@@ -17,7 +19,8 @@
     "CloudMeshAccess",
     "CloudBuildRangeMixin",
     "DistantBlockIgnoreMixin",
-    "FogColorAccess"
+    "FogColorAccess",
+    "CustomSkyPackMixin"
   ],
   "injectors": {
     "defaultRequire": 1

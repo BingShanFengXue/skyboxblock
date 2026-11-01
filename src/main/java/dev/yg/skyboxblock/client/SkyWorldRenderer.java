@@ -95,7 +95,7 @@ public final class SkyWorldRenderer {
         public int colorAttachment;
         private float[] vertices=new float[1024];
         private final Set<Long> seen=new HashSet<>();
-        private final EnumMap<SkyStyle,MaterialBatch> materials=new EnumMap<>(SkyStyle.class);
+        private final java.util.LinkedHashMap<dev.yg.skyboxblock.SkySkin,MaterialBatch> materials=new java.util.LinkedHashMap<>();
 
         Frame(LevelRenderer renderer,Camera camera,Matrix4f view,Matrix4f projection,float partialTick) {
             this.renderer=renderer;
@@ -111,7 +111,7 @@ public final class SkyWorldRenderer {
         public int vertices() { return floatCount/3; }
         boolean collected(long packed) { return seen.contains(packed); }
         long[] collectedPositions() { return seen.stream().mapToLong(Long::longValue).toArray(); }
-        private void face(SkyStyle style,int x,int y,int z,float[] corners) {
+        private void face(dev.yg.skyboxblock.SkySkin skin,int x,int y,int z,float[] corners) {
             int start=floatCount;
             if (floatCount+54>vertices.length) vertices=Arrays.copyOf(vertices,vertices.length*2);
             for (int vertex:new int[]{0,1,2,0,2,3}) {
@@ -120,7 +120,7 @@ public final class SkyWorldRenderer {
                 vertices[floatCount++]=LEGACY_SEAMS ? (float)(y-camera.y)+corners[o+1] : SkyRenderMath.relativeGridVertex(y,corners[o+1],camera.y);
                 vertices[floatCount++]=LEGACY_SEAMS ? (float)(z-camera.z)+corners[o+2] : SkyRenderMath.relativeGridVertex(z,corners[o+2],camera.z);
             }
-            materials.computeIfAbsent(style,ignored -> new MaterialBatch()).append(vertices,start,floatCount-start);
+            materials.computeIfAbsent(skin,ignored -> new MaterialBatch()).append(vertices,start,floatCount-start);
         }
     }
     private SkyWorldRenderer() {}
@@ -214,21 +214,24 @@ public final class SkyWorldRenderer {
     /** Diagnostics reuse the exact production vertices, never reconstructed screen geometry. */
     static void drawDiagnosticFaces(Frame frame,ShaderInstance instance) { MESH.draw(instance,frame.vertices,frame.floatCount,false); }
     static boolean needsDarkSkyMeter(Frame frame) {
-        return frame!=null && (frame.materials.containsKey(SkyStyle.BLACK)
-                || frame.materials.containsKey(SkyStyle.GALAXY) || frame.materials.containsKey(SkyStyle.APOCALYPSE));
+        if (frame==null) return false;
+        for (var skin:frame.materials.keySet()) if (skin.darkSky()) return true;
+        return false;
     }
     /** All color-producing passes use identical style batches; depth-only diagnostics stay combined. */
     static void drawMaterialFaces(Frame frame,ShaderInstance instance,int vanillaTexture) {
         for(var entry:frame.materials.entrySet()) {
-            SkyStyle style=entry.getKey();
-            instance.getUniform("SkyStyle").set(style.shaderMode());
+            dev.yg.skyboxblock.SkySkin skin=entry.getKey();
+            instance.getUniform("SkyStyle").set(skin.shaderMode());
             var material=instance.getUniform("SkyMaterial");
             if(material!=null) material.set(Boolean.getBoolean("skyboxblock.regression")
-                    && Boolean.getBoolean("skyboxblock.regression.negativeMaterialOwnership") ? -1 : style.ordinal());
+                    && Boolean.getBoolean("skyboxblock.regression.negativeMaterialOwnership") ? -1 : skin.material());
             int texture=vanillaTexture;
-            if(style.panorama()!=null) {
+            // Built-in panoramas and custom styles both carry a texture; the lookup path is identical,
+            // which is why a custom style needs no shader change at all.
+            if(skin.texture()!=null) {
                 texture=net.minecraft.client.Minecraft.getInstance().getTextureManager()
-                        .getTexture(SkyboxBlockMod.id("textures/sky/"+style.panorama()+".png")).getId();
+                        .getTexture(skin.texture()).getId();
                 SkyGlState.active(org.lwjgl.opengl.GL13.GL_TEXTURE0);
                 SkyGlState.bindTexture(texture);
                 // Periodic longitude, clamped poles; no per-face UVs or implicit mip selection at atan's wrap.
@@ -244,7 +247,7 @@ public final class SkyWorldRenderer {
     }
     static void drawCoverageFaces(Frame frame,ShaderInstance instance) {
         for(var entry:frame.materials.entrySet()) {
-            instance.getUniform("SkyMaterial").set(entry.getKey().ordinal());
+            instance.getUniform("SkyMaterial").set(entry.getKey().material());
             MaterialBatch batch=entry.getValue();
             MESH.draw(instance,batch.vertices,batch.count,false);
         }
@@ -267,10 +270,10 @@ public final class SkyWorldRenderer {
         if (!frame.seen.add(key)) return;
         long mixed=key; mixed^=mixed>>>33; mixed*=0xff51afd7ed558ccdL; mixed^=mixed>>>33; mixed*=0xc4ceb9fe1a85ec53L; mixed^=mixed>>>33;
         if (!(block.getBlockState().getBlock() instanceof SkyBlock skyBlock)) return;
-        SkyStyle style=skyBlock.style();
-        frame.geometrySignature+=mixed ^ (0x9e3779b97f4a7c15L * style.ordinal());
+        dev.yg.skyboxblock.SkySkin skin=skyBlock.skin();
+        frame.geometrySignature+=mixed ^ (0x9e3779b97f4a7c15L * (skin.material()+1));
         for (Direction direction:Direction.values()) if (block.shouldRenderFace(direction))
-            frame.face(style,pos.getX(),pos.getY(),pos.getZ(),FACES[direction.ordinal()]);
+            frame.face(skin,pos.getX(),pos.getY(),pos.getZ(),FACES[direction.ordinal()]);
     }
     public static void drawOpaque() {
         Frame frame=current();

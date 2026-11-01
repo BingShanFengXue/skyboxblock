@@ -1,5 +1,19 @@
 # Sky Box Block（天空盒方块）
 
+## R38 自定义天空盒与按玩家设置（2026-11-01，验证完成）
+
+最终构建 **1.0.5-test.1-r38**（基线 R36）：支持在用户目录里定义自己的天空盒方块，配置解析、纹理羽化与资源注入都在启动时完成；同时把环境属性与私有时间扩展到**按玩家覆盖**。
+
+- [R38 功能与规则说明](<docs/R38-CUSTOM-SKY-2026-11-01.md>)；[R36 指令手册](<docs/COMMANDS-R36-2026-10-31.md>)（`/skyboxblock env …` 的 15 项属性与 `time` 子命令继续适用）。
+- 目录 `config/skyboxblock/skyboxes/`：只读、不递归、只收 `.conf` 与 `.png`；单文件 ≤64 KB、≤64 个配置、≤64 种风格、单图 ≤4096×2048 / 16 MB。首次运行生成 `00_example.conf`（`enable = false`）与两张示例全景。
+- `enable = false` 时完全不扫描、不注册，与纯原版一致；客户端与服务端集合不一致时按 manifest 差异提示，而不是 MC 的 missing registry 报错。
+- 资源注入走 `CustomSkyPackMixin` 注入 `MultiPackResourceManager` 构造点，不写 `options.txt`、不改玩家设置。
+- 新指令：客户端 `/skyboxcustom`、`/skyboxcustom list`；服务端 `/skyboxblock player <targets> show|set|reset|time …`（权限等级 2），存储 `world/serverconfig/skyboxblock-players.properties`，生效值 = 全局属性 + 玩家覆盖。
+- 验证：配置解析 186 断言（含 14 组畸形用例、BOM、转义、语言回退）、服务端后端 105 检查（新增 14 条：合并、隔离、落盘、重启、reset）、既有全量回归 782 + 42,257 + 284 + 389,385 + 68,012 全 PASS；实机确认自定义风格方块渲染出配置的全景，[截图](<docs/screenshots/r38-custom-style-20261101.png>)。
+- 已知限制：自定义方块在启动时注册，改配置需重启；客户端与服务端 `skyboxes/` 内容必须一致；从配置里删掉 id 会让存档中该方块变成空气；按玩家设置只影响显示，模组从不写 `setDayTime` / `setWeatherParameters`。
+- 下载：[R38 安装包](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.5-test.1-r38/skyboxblock-1.0.5-test.1-r38.jar>)；[源码包](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.5-test.1-r38/skyboxblock-1.0.5-test.1-r38-sources.jar>)；[验证 probe](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.5-test.1-r38/skybox-validation-probe-r38.jar>)；[源码与证据包](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.5-test.1-r38/skybox-r38-source-and-evidence.zip>)。交付包 SHA-256 `2904bb8d35e93b2d0effefd625c60d348ac2cfe6e9783ae11fc8f3ed94110817`。
+- 未替换用户实例、存档或光影包；构建产物经 GitHub Release 分发，不入仓库。
+
 ## R36 服务端环境属性与云接缝修复（2026-10-31，验证完成）
 
 最终构建 **1.0.4-test.2-r36**：原版天空盒 15 项环境属性改为服务端 world 级权威配置，变更同步所有同版本玩家；新增服务器统一私有天空时间控制；修复移动云相交面重复透明混合造成的亮点接缝。
@@ -7,7 +21,7 @@
 - [R36指令手册](<docs/COMMANDS-R36-2026-10-31.md>)；[R36交付报告](<docs/R36-DELIVERY-2026-10-31.md>)；[原版属性语义手册](<docs/VANILLA-ENVIRONMENT-ATTRIBUTES.md>)。
 - 变更命令需要权限等级2，查询对所有玩家开放；旧 `cloudheight`、`clouddistance`、`cloudfade`、根 `reload` 已移除。
 - 云修复采用私有 stencil 首片元消费，不改云网格、UV、纹理或世界 framebuffer；原版与 Iris/FSR2 各 128 帧均无重复透明混合、无覆盖丢失，[alpha 对照](<docs/screenshots/r36-cloud-seam-comparison-20261031.png>)。
-- 服务端后端 91 项、命令/权限/TAB/时间 782 项、天空时间 68,012 项、环境渲染 42,257 项、既有数学 389,385 项等共 **500,811** 项 Java 断言通过；包审计 76/76；真实专服加双客户端 29/29 通过（含重启后重新入服；该矩阵跑在前一构建 `711fd91f…` 上，交付包见下行哈希）。证据在 `build/r36-multiplayer/`。
+- 服务端后端 91 项、命令/权限/TAB/时间 782 项、天空时间 68,012 项、环境渲染 42,257 项、既有数学 389,385 项等共 **500,811** 项 Java 断言通过；包审计 76/76；真实专服加双客户端 29/29 通过（含重启后重新入服；该矩阵跑在前一构建 `711fd91f…` 上）。
 - 颜色统一为 `#RRGGBB` / `#AARRGGBB`；`0x…` 等其他写法一律拒绝。`time set` 不解除已有锁定。
 - 下载：[R36 安装包](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.4-test.2-r36/skyboxblock-1.0.4-test.2-r36.jar>)；[R36 验证 probe](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.4-test.2-r36/skybox-validation-probe-r36.jar>)；[源码与证据包](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.4-test.2-r36/skybox-r36-source-and-evidence.zip>)。交付包 SHA-256 `465836d84bbbbff0445c4c5e306b8092045ba77f103df3831465d8c32d6d9d80`。
 - 客户端与服务端都需安装本版；未安装的客户端不会收到同步。多人矩阵为本机回环双客户端，不代表公网并发结论。

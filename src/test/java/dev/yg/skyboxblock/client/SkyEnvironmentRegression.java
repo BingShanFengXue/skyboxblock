@@ -130,7 +130,10 @@ public final class SkyEnvironmentRegression {
         rejects(sky, "0X7BA4FF", "#-only colour form rejects upper-case 0X");
         accepts(sky, "  #7BA4FF  ", "#7BA4FF", "surrounding blanks are trimmed");
         rejects(sky, "#7BA4F", "short RGB");
-        rejects(sky, "#7BA4FF00", "RGB must not carry alpha");
+        // Unified colour rule: every colour attribute accepts six or eight digits; an RGB-only
+        // attribute has nowhere to keep alpha, so the leading pair is dropped.
+        accepts(sky, "#7BA4FF00", "#A4FF00", "eight digits into RGB keeps the colour and drops alpha");
+        accepts(sky, "#FF7BA4FF", "#7BA4FF", "opaque alpha into RGB is dropped silently");
         rejects(sky, "7BA4FF", "RGB needs a prefix");
         rejects(sky, "#GGGGGG", "non-hex characters");
         rejects(sky, "#7BA 4FF", "embedded whitespace");
@@ -145,7 +148,8 @@ public final class SkyEnvironmentRegression {
         equal(-1, SkyEnvironment.parse(cloud, "#FFFFFFFF").color(), "white stays -1 as a signed int");
         equal(0x80FFFFFF, SkyEnvironment.parse(cloud, "#80FFFFFF").color(), "high alpha preserved");
         equal(0xFF000000, SkyEnvironment.parse(cloud, "#FF000000").color(), "opaque black preserved");
-        rejects(cloud, "#FFB0D8", "ARGB needs eight digits");
+        // Six digits into an alpha attribute is accepted as fully opaque.
+        accepts(cloud, "#B0D8FF", "#FFB0D8FF", "six digits into ARGB becomes opaque");
         rejects(cloud, "#FFFFFFFFF", "ARGB rejects nine digits");
 
         SkyEnvironment.Attribute fogEnd = SkyEnvironment.FOG_END_DISTANCE;

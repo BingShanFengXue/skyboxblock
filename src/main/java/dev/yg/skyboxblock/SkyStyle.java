@@ -15,6 +15,7 @@ public enum SkyStyle {
     private final String blockId;
     private final int shaderMode;
     private final String panorama;
+    private SkySkin skin;
     SkyStyle(String blockId, int shaderMode, String panorama) {
         this.blockId = blockId;
         this.shaderMode = shaderMode;
@@ -23,4 +24,10 @@ public enum SkyStyle {
     public String blockId() { return blockId; }
     public int shaderMode() { return shaderMode; }
     public String panorama() { return panorama; }
+    /** Cached identity shared with the custom styles; lazily built to avoid a static-init cycle. */
+    public SkySkin skin() {
+        SkySkin cached = skin;
+        if (cached == null) skin = cached = SkySkin.of(this);
+        return cached;
+    }
 }

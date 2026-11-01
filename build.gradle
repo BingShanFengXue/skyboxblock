@@ -235,7 +235,7 @@ def r30ProbeDevJar = tasks.register('r30ProbeJar', Jar) {
     dependsOn tasks.named('r30ProbeClasses')
     from sourceSets.r30Probe.output
     archiveBaseName.set('skybox-validation-probe')
-    archiveVersion.set('r36')
+    archiveVersion.set('r38')
     archiveClassifier.set('dev')
     from('LICENSE') { rename { 'LICENSE_skybox_validation_probe' } }
 }
@@ -245,6 +245,6 @@ tasks.register('remapR30ProbeJar', net.fabricmc.loom.task.RemapJarTask) {
     classpath.setFrom(sourceSets.r30Probe.compileClasspath)
     addNestedDependencies.set(false)
     archiveBaseName.set('skybox-validation-probe')
-    archiveVersion.set('r36')
+    archiveVersion.set('r38')
     archiveClassifier.set('')
 }

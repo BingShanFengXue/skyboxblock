@@ -15,10 +15,11 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class SkyBlock extends BaseEntityBlock {
     public static final MapCodec<SkyBlock> CODEC = simpleCodec(SkyBlock::new);
 
-    private final SkyStyle style;
-    public SkyBlock(Properties properties) { this(SkyStyle.VANILLA, properties); }
-    public SkyBlock(SkyStyle style, Properties properties) { super(properties); this.style = style; }
-    public SkyStyle style() { return style; }
+    private final SkySkin skin;
+    public SkyBlock(Properties properties) { this(SkyStyle.VANILLA.skin(), properties); }
+    public SkyBlock(SkyStyle style, Properties properties) { this(style.skin(), properties); }
+    public SkyBlock(SkySkin skin, Properties properties) { super(properties); this.skin = skin; }
+    public SkySkin skin() { return skin; }
     @Override protected MapCodec<? extends BaseEntityBlock> codec() { return CODEC; }
     @Override protected RenderShape getRenderShape(BlockState state) { return RenderShape.INVISIBLE; }
     @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new SkyBlockEntity(pos, state); }

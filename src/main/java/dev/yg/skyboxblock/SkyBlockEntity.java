@@ -14,7 +14,7 @@ public final class SkyBlockEntity extends BlockEntity {
         if (level == null) return true;
         BlockPos neighbor = worldPosition.relative(direction);
         if (level.getBlockState(neighbor).getBlock() instanceof SkyBlock adjacent
-                && getBlockState().getBlock() instanceof SkyBlock own && adjacent.style() == own.style()) return false;
+                && getBlockState().getBlock() instanceof SkyBlock own && adjacent.skin().equals(own.skin())) return false;
         return Block.shouldRenderFace(getBlockState(), level, worldPosition, direction, neighbor);
     }
 }

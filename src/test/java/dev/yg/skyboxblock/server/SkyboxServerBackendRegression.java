@@ -34,6 +34,7 @@ public final class SkyboxServerBackendRegression {
             persistence(root.resolve("settings.properties"));
             failures(root.resolve("failure.properties"), root);
             clockPersistence(root.resolve("clock.properties"));
+            playerScope(root.resolve("players.properties"));
             codec();
             SkyboxServerConfig.clearTestFile();
             throwsType(IllegalStateException.class, () -> SkyboxServerConfig.forSource(null), "missing server without test hook");
@@ -267,4 +268,51 @@ public final class SkyboxServerBackendRegression {
         throw new AssertionError(message + ": exception not thrown");
     }
     @FunctionalInterface private interface Throwing { void run() throws Exception; }
+
+    /** Per-player overrides: merge, isolation, persistence and reset. */
+    private static void playerScope(Path file) throws Exception {
+        var store = store(file);
+        store.setEnvironment("star_brightness", "0.5");
+        java.util.UUID alice = java.util.UUID.fromString("00000000-0000-0000-0000-00000000a11c");
+        java.util.UUID bob = java.util.UUID.fromString("00000000-0000-0000-0000-00000000b0b0");
+        check(!store.hasOverride(alice), "player starts without override");
+        check(store.settingsFor(alice).revision() == store.settings().revision(), "unset player inherits global revision");
+        store.setPlayerEnvironment(alice, "star_brightness", "0.2");
+        check(store.hasOverride(alice) && !store.hasOverride(bob), "override applies to one player only");
+        check(merged(store, alice, "star_brightness").equals("0.2"), "player value overrides global");
+        check(merged(store, bob, "star_brightness").equals("0.5"), "other player keeps the global value");
+        check(merged(store, alice, "sky_color").equals(merged(store, bob, "sky_color")),
+                "unoverridden attribute still follows global");
+        store.setPlayerTime(alice, 6000, 100);
+        check(store.settingsFor(alice).clock().ticks() == 6000, "player clock override applies");
+        check(store.settingsFor(bob).clock().ticks() != 6000 || store.settings().clock().ticks() != 6000,
+                "player clock stays local");
+        // The client drops any snapshot whose revision is not greater than the last accepted one,
+        // so every transmitted snapshot must carry a fresh revision or per-player changes vanish.
+        long first = store.forSend(alice).revision();
+        long second = store.forSend(alice).revision();
+        check(second > first, "each send carries a rising revision");
+        check(store.forSend(alice).revision() >= store.forSend(bob).revision() - 1,
+                "interleaved sends stay monotonic across players");
+        check(merged(store, alice, "star_brightness").equals("0.2"),
+                "transmitted snapshot still carries the player override");
+        check(store.forSend(bob).environment().value("star_brightness").text().equals("0.5"),
+                "other player's transmitted snapshot keeps the global value");
+        Path players = file.resolveSibling("skyboxblock-players.properties");
+        check(Files.isRegularFile(players), "player overrides persisted to their own file");
+        var reloaded = store(file);
+        check(reloaded.hasOverride(alice), "override survives a restart");
+        check(merged(reloaded, alice, "star_brightness").equals("0.2"), "reloaded player value intact");
+        store.resetPlayerEnvironment(alice, "star_brightness");
+        check(merged(store, alice, "star_brightness").equals("0.5"), "reset falls back to global");
+        store.setPlayerEnvironment(alice, "star_brightness", "0.9");
+        store.resetPlayerAll(alice);
+        check(!store.hasOverride(alice), "reset all clears every player key");
+        check(merged(store, alice, "star_brightness").equals("0.5"), "reset all falls back to global");
+    }
+
+    private static String merged(SkyboxServerConfig.Store store, java.util.UUID player, String attribute) {
+        var entry = store.settingsFor(player).environment().value(attribute);
+        return entry == null ? "" : entry.text();
+    }
 }

@@ -90,6 +90,10 @@ public final class SkyboxServerConfig {
         private final Path file;
         private final MinecraftServer server;
         private volatile SkyboxSettings settings = SkyboxSettings.DEFAULT;
+        /** Lazily loaded per-player overrides; null until first use. */
+        private java.util.Map<java.util.UUID, Properties> overrides;
+        /** Monotonic counter so every sent snapshot has a revision the client will accept. */
+        private long sendSequence;
 
         private Store(Path file, MinecraftServer server) {
             this.file = file.toAbsolutePath().normalize();
@@ -193,7 +197,130 @@ public final class SkyboxServerConfig {
         }
 
         private void publish(SkyboxSettings snapshot) {
-            if (server != null) SkyboxNetworking.broadcast(server, snapshot);
+            if (server == null) return;
+            // Per-player overrides mean each client may need a different snapshot, and the client
+            // drops anything whose revision does not increase, so every send carries a fresh one.
+            for (net.minecraft.server.level.ServerPlayer player : server.getPlayerList().getPlayers())
+                SkyboxNetworking.send(player, forSend(player.getUUID()));
+        }
+
+        /** Snapshot prepared for transmission: this player's effective values with a rising revision. */
+        public synchronized SkyboxSettings forSend(java.util.UUID player) {
+            SkyboxSettings effective = settingsFor(player);
+            long revision = Math.max(effective.revision(), ++sendSequence);
+            return new SkyboxSettings(effective.environment(), effective.clouds(), effective.cloudHeight(),
+                    effective.cloudFadeStart(), effective.cloudFadeEnd(), effective.simulatedLocalWeather(),
+                    effective.localTimeDimensions(), effective.simulatedTimeDimensions(), effective.clock(),
+                    effective.clockAnchor(), revision);
+        }
+
+        // ---------------------------------------------------------------- per-player overrides
+
+        /** Effective settings for one player: the global snapshot with that player's keys applied. */
+        public SkyboxSettings settingsFor(java.util.UUID player) { return settingsFor(player, settings); }
+
+        private SkyboxSettings settingsFor(java.util.UUID player, SkyboxSettings global) {
+            Properties overrides = playerOverrides().get(player);
+            if (overrides == null || overrides.isEmpty()) return global;
+            try {
+                Properties merged = read(file);
+                merged.putAll(overrides);
+                return parse(merged, global.revision());
+            } catch (IOException | RuntimeException error) {
+                LOGGER.warn("[skyboxblock] player override for {} ignored", player, error);
+                return global;
+            }
+        }
+
+        public boolean hasOverride(java.util.UUID player) {
+            Properties overrides = playerOverrides().get(player);
+            return overrides != null && !overrides.isEmpty();
+        }
+
+        /** Same attribute set and validation as the global command, written to the player's scope. */
+        public synchronized void setPlayerEnvironment(java.util.UUID player, String id, String value)
+                throws IOException {
+            var attribute = requireAttribute(id);
+            if (value != null && value.trim().equalsIgnoreCase(SkyEnvironment.AUTO)) {
+                resetPlayerEnvironment(player, attribute.id());
+                return;
+            }
+            String canonical = SkyEnvironment.parse(attribute, value).text();
+            commitPlayer(player, properties -> {
+                SkyEnvironment.aliasedKeys(properties.stringPropertyNames(), attribute).forEach(properties::remove);
+                properties.setProperty(SkyEnvironment.key(attribute), canonical);
+            });
+        }
+
+        public synchronized void resetPlayerEnvironment(java.util.UUID player, String id) throws IOException {
+            var attribute = requireAttribute(id);
+            commitPlayer(player, properties ->
+                    SkyEnvironment.aliasedKeys(properties.stringPropertyNames(), attribute).forEach(properties::remove));
+        }
+
+        public synchronized void setPlayerTime(java.util.UUID player, int ticks, long now) throws IOException {
+            long anchor = requireTime(now);
+            SkyboxSettings current = settingsFor(player);
+            SkyTimeClock.Mode mode = current.clock().mode() == SkyTimeClock.Mode.LOCKED
+                    ? SkyTimeClock.Mode.LOCKED : SkyTimeClock.Mode.RUNNING;
+            commitPlayer(player, properties -> putClock(properties, new SkyTimeClock.Setting(mode, ticks), anchor));
+        }
+
+        public synchronized void resetPlayerAll(java.util.UUID player) throws IOException {
+            commitPlayer(player, Properties::clear);
+        }
+
+        private synchronized void commitPlayer(java.util.UUID player, Consumer<Properties> mutation)
+                throws IOException {
+            Properties global = read(file);
+            java.util.Map<java.util.UUID, Properties> all = playerOverrides();
+            Properties properties = all.computeIfAbsent(player, ignored -> new Properties());
+            mutation.accept(properties);
+            Properties merged = new Properties();
+            merged.putAll(global);
+            merged.putAll(properties);
+            try { parse(merged, settings.revision()); }
+            catch (IllegalArgumentException error) { throw new IOException("玩家天空盒配置无效，未写入", error); }
+            persistPlayers();
+            publish(settings);
+        }
+
+        /** Loads the override file once and caches it; writes always refresh the cache. */
+        private java.util.Map<java.util.UUID, Properties> playerOverrides() {
+            java.util.Map<java.util.UUID, Properties> cached = overrides;
+            if (cached != null) return cached;
+            cached = new java.util.LinkedHashMap<>();
+            String prefix = "player.";
+            try {
+                Properties flat = read(playersFile());
+                for (String name : flat.stringPropertyNames()) {
+                    if (!name.startsWith(prefix)) continue;
+                    int dot = name.indexOf('.', prefix.length());
+                    if (dot < 0) continue;
+                    try {
+                        java.util.UUID id = java.util.UUID.fromString(name.substring(prefix.length(), dot));
+                        cached.computeIfAbsent(id, ignored -> new Properties())
+                                .setProperty(name.substring(dot + 1), flat.getProperty(name));
+                    } catch (IllegalArgumentException malformed) {
+                        LOGGER.warn("[skyboxblock] ignoring malformed player override {}", name);
+                    }
+                }
+            } catch (IOException error) {
+                LOGGER.warn("[skyboxblock] player overrides unreadable; none applied", error);
+            }
+            overrides = cached;
+            return cached;
+        }
+
+        private void persistPlayers() throws IOException {
+            Properties flat = new Properties();
+            playerOverrides().forEach((id, properties) -> properties.forEach((key, value) ->
+                    flat.setProperty("player." + id + "." + key, String.valueOf(value))));
+            persist(playersFile(), flat);
+        }
+
+        private Path playersFile() {
+            return file.resolveSibling("skyboxblock-players.properties");
         }
     }
 
