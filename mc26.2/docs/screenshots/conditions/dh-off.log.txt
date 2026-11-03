@@ -1,0 +1,21 @@
+[05:30:54] [Render thread/INFO]: [skyboxblock] 26.2 环境：Iris=true DistantHorizons=false（DH 深度注入在自绘天空路径下不可用）
+[05:30:55] [Download-2/ERROR]: Failed to fetch user properties
+com.mojang.authlib.exceptions.InvalidCredentialsException: Status: 401
+	at knot//com.mojang.authlib.exceptions.MinecraftClientHttpException.toAuthenticationException(MinecraftClientHttpException.java:70)
+Caused by: MinecraftClientHttpException[type=HTTP_ERROR, status=401, response=ErrorResponse[path=/player/attributes, error=null, errorMessage=null, details=null]]
+	at knot//com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:170)
+[05:30:55] [Render thread/INFO]: Shaders are disabled because no valid shaderpack is selected
+[05:30:57] [Download-2/INFO]: Could not authorize you against Realms server: java.lang.RuntimeException: Failed to parse into SignedJWT: 0
+[05:30:57] [Download-2/ERROR]: Failed to fetch Realms feature flags
+com.mojang.realmsclient.exception.RealmsServiceException: Realms authentication error with message 'java.lang.RuntimeException: Failed to parse into SignedJWT: 0'
+com.google.gson.JsonParseException: Pack declares support for version newer than 81, but is missing mandatory fields min_format and max_format
+[05:31:03] [Render thread/INFO]: [skyboxblock] sky target created 1280x800 (rendererOwnsTarget=true)
+[05:31:04] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:sky_block custom=false texture=null pos=BlockPos{x=0, y=-48, z=4}
+[05:31:04] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:galaxy_sky_block custom=false texture=skyboxblock:textures/sky/galaxy.png pos=BlockPos{x=0, y=-61, z=4}
+[05:31:04] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:dusk_sky_block custom=false texture=skyboxblock:textures/sky/dusk.png pos=BlockPos{x=1, y=-61, z=4}
+[05:31:04] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:lush_sky_block custom=false texture=skyboxblock:textures/sky/lush.png pos=BlockPos{x=2, y=-61, z=4}
+[05:31:04] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:white_sky_block custom=false texture=null pos=BlockPos{x=-2, y=-61, z=4}
+[05:31:04] [Download-1/ERROR]: Failed to retrieve profile key pair
+MinecraftClientHttpException[type=HTTP_ERROR, status=401, response=ErrorResponse[path=/player/certificates, error=null, errorMessage=null, details=null]]
+	at knot//com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:170)
+[05:31:06] [Render thread/INFO]: [skyboxblock] 云层 CPU 开销：平均 698 µs/帧（224x140，200 帧样本）

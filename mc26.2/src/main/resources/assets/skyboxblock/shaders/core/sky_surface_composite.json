@@ -1,0 +1,8 @@
+{
+  "blend":{"func":"add","srcrgb":"one","dstrgb":"1-srcalpha","srcalpha":"zero","dstalpha":"one"},
+  "vertex":"skyboxblock:sky_surface_composite",
+  "fragment":"skyboxblock:sky_surface_composite",
+  "attributes":["Position"],
+  "samplers":[{"name":"SurfaceColor"},{"name":"NativeDepth"},{"name":"NativeColor"}],
+  "uniforms":[{"name":"SkyViewport","type":"float","count":4,"values":[0,0,1,1]},{"name":"FullCoverageOnly","type":"int","count":1,"values":[0]},{"name":"NativeBackgroundEnabled","type":"int","count":1,"values":[0]}]
+}

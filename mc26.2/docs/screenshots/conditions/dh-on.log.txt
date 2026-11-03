@@ -1,0 +1,52 @@
+[05:30:23] [main/INFO]: Apply DH mixin [com.seibel.distanthorizons.fabric.mixins.client.MixinIrisFrameBuffer] -> [net.irisshaders.iris.gl.framebuffer.GlFramebuffer]...
+[05:30:30] [Render thread/WARN]: Changing Distant Horizons' rendering engine to [OPEN_GL] to allow for Iris rendering. This renderer will be unavailable once Minecraft moves to Vulkan and must be fixed on Iris' end.
+[05:30:30] [Render thread/INFO]: [skyboxblock] 26.2 环境：Iris=true DistantHorizons=true（DH 深度注入在自绘天空路径下不可用）
+[05:30:31] [Download-2/ERROR]: Failed to fetch user properties
+com.mojang.authlib.exceptions.InvalidCredentialsException: Status: 401
+	at knot//com.mojang.authlib.exceptions.MinecraftClientHttpException.toAuthenticationException(MinecraftClientHttpException.java:70)
+Caused by: MinecraftClientHttpException[type=HTTP_ERROR, status=401, response=ErrorResponse[path=/player/attributes, error=null, errorMessage=null, details=null]]
+	at knot//com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:170)
+[05:30:32] [Render thread/INFO]: DH Ready, binding Iris event handlers...
+[05:30:32] [Render thread/INFO]: DH Iris events bound.
+[05:30:32] [Render thread/INFO]: Shaders are disabled because no valid shaderpack is selected
+[05:30:33] [Download-2/INFO]: Could not authorize you against Realms server: java.lang.RuntimeException: Failed to parse into SignedJWT: 0
+[05:30:33] [Download-2/ERROR]: Failed to fetch Realms feature flags
+com.mojang.realmsclient.exception.RealmsServiceException: Realms authentication error with message 'java.lang.RuntimeException: Failed to parse into SignedJWT: 0'
+com.google.gson.JsonParseException: Pack declares support for version newer than 81, but is missing mandatory fields min_format and max_format
+[05:30:42] [Render thread/INFO]: [skyboxblock] sky target created 1280x800 (rendererOwnsTarget=true)
+[05:30:42] [Render thread/INFO]: Iris detected, Distant Horizons OpenGL error logging won't be sent in the chat due to Iris throwing known (harmless) OpenGL errors. This is a bug with Iris, not Distant Horizons.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:42] [Render thread/INFO]: Shader loaded sucessfully.
+[05:30:43] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:sky_block custom=false texture=null pos=BlockPos{x=-2, y=-48, z=4}
+[05:30:43] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:galaxy_sky_block custom=false texture=skyboxblock:textures/sky/galaxy.png pos=BlockPos{x=0, y=-61, z=4}
+[05:30:43] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:dusk_sky_block custom=false texture=skyboxblock:textures/sky/dusk.png pos=BlockPos{x=1, y=-61, z=4}
+[05:30:43] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:lush_sky_block custom=false texture=skyboxblock:textures/sky/lush.png pos=BlockPos{x=2, y=-61, z=4}
+[05:30:43] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:white_sky_block custom=false texture=null pos=BlockPos{x=-2, y=-61, z=4}
+[05:30:43] [Download-2/ERROR]: Failed to retrieve profile key pair
+MinecraftClientHttpException[type=HTTP_ERROR, status=401, response=ErrorResponse[path=/player/certificates, error=null, errorMessage=null, details=null]]
+	at knot//com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:170)
+[05:30:45] [Render thread/INFO]: [skyboxblock] 云层 CPU 开销：平均 679 µs/帧（224x140，200 帧样本）

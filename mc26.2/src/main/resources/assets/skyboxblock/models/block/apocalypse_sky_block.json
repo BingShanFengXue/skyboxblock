@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "skyboxblock:block/apocalypse_sky_block"
+  }
+}

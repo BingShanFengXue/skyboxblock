@@ -1,0 +1,12 @@
+{
+  "itemGroup.skyboxblock.sky": "Sky Box Blocks",
+  "block.skyboxblock.sky_block": "Sky Box Block (Vanilla)",
+  "block.skyboxblock.white_sky_block": "Sky Box Block (Pure White)",
+  "block.skyboxblock.black_sky_block": "Sky Box Block (Pure Black)",
+  "block.skyboxblock.kloppenheim_sky_block": "Sky Box Block (Clear Sky A)",
+  "block.skyboxblock.syferfontein_sky_block": "Sky Box Block (Clear Sky B)",
+  "block.skyboxblock.dusk_sky_block": "Sky Box Block (Dusk)",
+  "block.skyboxblock.galaxy_sky_block": "Sky Box Block (Milky Way)",
+  "block.skyboxblock.lush_sky_block": "Sky Box Block (Lush Planet)",
+  "block.skyboxblock.apocalypse_sky_block": "Sky Box Block (Apocalypse Land)"
+}

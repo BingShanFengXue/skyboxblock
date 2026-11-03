@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.yg.skyboxblock.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["Fixture262RendererMixin", "Fixture262WindowMixin", "Fixture262MouseMixin", "Fixture262LevelMixin"],
+  "injectors": {"defaultRequire": 1}
+}

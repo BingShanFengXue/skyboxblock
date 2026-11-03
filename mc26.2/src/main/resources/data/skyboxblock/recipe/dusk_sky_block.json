@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    "skyboxblock:sky_block",
+    "minecraft:orange_dye"
+  ],
+  "result": {
+    "id": "skyboxblock:dusk_sky_block",
+    "count": 1
+  }
+}

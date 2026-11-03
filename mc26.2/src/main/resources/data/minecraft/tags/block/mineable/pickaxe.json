@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "values": [
+    "skyboxblock:sky_block",
+    "skyboxblock:white_sky_block",
+    "skyboxblock:black_sky_block",
+    "skyboxblock:kloppenheim_sky_block",
+    "skyboxblock:syferfontein_sky_block",
+    "skyboxblock:dusk_sky_block",
+    "skyboxblock:galaxy_sky_block",
+    "skyboxblock:lush_sky_block",
+    "skyboxblock:apocalypse_sky_block"
+  ]
+}

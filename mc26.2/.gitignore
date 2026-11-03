@@ -1,0 +1,21 @@
+# 26.2 移植目录：构建产物、缓存与本地实例一律不入库
+/build/
+/.gradle/
+/.gradle-home/
+/logs/
+/output/
+/run/
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# 本机配置
+gradle.local.properties
+local.paths.json
+
+# Python
+__pycache__/
+*.py[cod]
+
+# 工作区临时探针（不随仓库分发）
+tools/_scratch_*.py

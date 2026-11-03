@@ -1,5 +1,14 @@
 # Sky Box Block（天空盒方块）
 
+## Minecraft 26.2 移植版（Fabric，1.0.6-test.1-port.2）
+
+同一仓库的 [`mc26.2/`](<mc26.2/README.md>) 是 1.21.1 主线的 **26.2 移植**：重做了首版移植的天空渲染路径、修正物品名称的描述键来源，并按 26.2 的 API 重新接通 Iris/ITRP 的 HDR 折射、逐玩家环境属性与私有天空时钟。
+
+- 安装：Minecraft **26.2**、Java **25**、Fabric Loader **0.20.1+** 与对应 Fabric API；产物 [`skyboxblock-1.0.6-test.1-port.2-mc26.2.jar`](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.6-test.1-port.2-mc26.2/skyboxblock-1.0.6-test.1-port.2-mc26.2.jar>)，[源码与证据包](<https://github.com/BingShanFengXue/skyboxblock/releases/download/v1.0.6-test.1-port.2-mc26.2/skybox-mc26.2-port.2-source-and-evidence.zip>)。交付包 SHA-256 `45c256728cdac6a75f3e71b1a1b6af1335de53e753702aa3dee79aa450c5daa8`。
+- 状态：**OpenGL 路径**的移植测试版；Vulkan、26.1、26.3 均未标记为已适配。当前结论见 [PORT2-VALIDATION.md](<mc26.2/docs/PORT2-VALIDATION.md>)，验收摘要 `overallStatus: accepted`。
+- 两套工程互不影响：1.21.1 主线在仓库根（`src/`、`tools/`、根 `gradle.properties`），26.2 移植在 `mc26.2/`（独立源码树、独立 `gradle.properties` 与 `.gradle-home`）。
+- 许可与主线一致：代码 MIT，第三方归属见 `mc26.2/NOTICE`、`mc26.2/THIRD_PARTY_NOTICES.md`。**已发布的 26.2 jar 自身未内嵌 NOTICE 文件**，归属随仓库与 Release 页面提供。
+
 ## R38 自定义天空盒与按玩家设置（2026-11-01，验证完成）
 
 最终构建 **1.0.5-test.1-r38**（基线 R36）：支持在用户目录里定义自己的天空盒方块，配置解析、纹理羽化与资源注入都在启动时完成；同时把环境属性与私有时间扩展到**按玩家覆盖**。

@@ -1,0 +1,21 @@
+# NOTICE
+
+本项目的**代码**按 [MIT](<LICENSE>) 分发：`Copyright (c) 2026 Bing6512`。
+
+## 第三方归属
+
+- **Literal Sky Block** — 早期「不可见普通方块模型 + 方块实体渲染入口 + 方块面天空投影」框架的参考／派生脉络。
+  `Copyright (c) 2022 Kristiāns Micītis`，MIT。
+  上游完整许可原文见 [LICENSES/Literal-Sky-Block-MIT.txt](<LICENSES/Literal-Sky-Block-MIT.txt>)，
+  并随模组 jar 打为 `META-INF/licenses/skyboxblock/Literal-Sky-Block-MIT.txt`。
+
+- **用户提供的六套全景素材** — 不随本项目代码改标 MIT，逐件协议（CC0 1.0 / CC BY 4.0）与署名文本见
+  [THIRD_PARTY_NOTICES.md](<THIRD_PARTY_NOTICES.md>) 第 7 节；授权证据与素材清单见
+  [docs/third-party-evidence/](<docs/third-party-evidence/README.md>)。
+
+- **Minecraft 原版资源**（日／月／云纹理与云网格）来自运行时游戏资源，本项目 jar 不打包分发这些原始资源。
+
+## 说明
+
+`LICENSE` 保持 MIT 标准正文，便于机器识别；上列归属放在本文件与 `THIRD_PARTY_NOTICES.md`，
+两者都随源码与分发包一同提供。

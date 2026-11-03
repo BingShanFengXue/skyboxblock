@@ -1,0 +1,30 @@
+{
+  "vertex": "skyboxblock:world_sky",
+  "fragment": "skyboxblock:sky_material_background",
+  "attributes": ["Position"],
+  "samplers": [
+    {"name": "Sampler0"},
+    {"name": "WorldOpaqueDepth"},
+    {"name": "SkyCoverage"},
+    {"name": "ExposureData"},
+    {"name": "DistantDepth"}
+  ],
+  "uniforms": [
+    {"name":"PanoramaRayInverse","type":"matrix4x4","count":16,"values":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]},
+    {"name":"PanoramaLegacyRays","type":"int","count":1,"values":[0]},
+    {"name":"SkyMaterial","type":"int","count":1,"values":[0]},
+    {"name":"SkyStyle","type":"int","count":1,"values":[0]},
+    {"name": "WorldProjection", "type": "matrix4x4", "count": 16, "values": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]},
+    {"name": "WorldView", "type": "matrix4x4", "count": 16, "values": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]},
+    {"name": "SkyViewport", "type": "float", "count": 4, "values": [0,0,1,1]},
+    {"name": "ClipPlane", "type": "float", "count": 4, "values": [0,0,0,1]},
+    {"name": "ClippingEnabled", "type": "int", "count": 1, "values": [0]},
+    {"name": "RasterScale", "type": "float", "count": 2, "values": [1,1]},
+    {"name": "RasterJitter", "type": "float", "count": 2, "values": [0,0]},
+    {"name": "TextureExtent", "type": "float", "count": 2, "values": [1,1]},
+    {"name": "Gain", "type": "float", "count": 1, "values": [1]},
+    {"name":"DistantDepthEnabled","type":"int","count":1,"values":[0]},
+    {"name":"DistantProjectionDepth","type":"float","count":4,"values":[-1,-0.1,-1,0]},
+    {"name":"DistantDepthNdc","type":"float","count":2,"values":[2,-1]}
+  ]
+}

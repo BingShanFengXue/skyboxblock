@@ -1,0 +1,36 @@
+[05:31:18] [main/INFO]: Apply DH mixin [com.seibel.distanthorizons.fabric.mixins.client.MixinIrisFrameBuffer] -> [net.irisshaders.iris.gl.framebuffer.GlFramebuffer]...
+[05:31:25] [Render thread/WARN]: Changing Distant Horizons' rendering engine to [OPEN_GL] to allow for Iris rendering. This renderer will be unavailable once Minecraft moves to Vulkan and must be fixed on Iris' end.
+[05:31:25] [Render thread/INFO]: [skyboxblock] 26.2 环境：Iris=true DistantHorizons=true（DH 深度注入在自绘天空路径下不可用）
+[05:31:26] [Download-2/ERROR]: Failed to fetch user properties
+com.mojang.authlib.exceptions.InvalidCredentialsException: Status: 401
+	at knot//com.mojang.authlib.exceptions.MinecraftClientHttpException.toAuthenticationException(MinecraftClientHttpException.java:70)
+Caused by: MinecraftClientHttpException[type=HTTP_ERROR, status=401, response=ErrorResponse[path=/player/attributes, error=null, errorMessage=null, details=null]]
+	at knot//com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:170)
+[05:31:26] [Render thread/INFO]: DH Ready, binding Iris event handlers...
+[05:31:26] [Render thread/INFO]: DH Iris events bound.
+[05:31:27] [Download-2/INFO]: Could not authorize you against Realms server: java.lang.RuntimeException: Failed to parse into SignedJWT: 0
+[05:31:27] [Download-2/ERROR]: Failed to fetch Realms feature flags
+com.mojang.realmsclient.exception.RealmsServiceException: Realms authentication error with message 'java.lang.RuntimeException: Failed to parse into SignedJWT: 0'
+[05:31:29] [Render thread/INFO]: Using shaderpack: iterationRP Alpha 0.8.31.zip
+com.google.gson.JsonParseException: Pack declares support for version newer than 81, but is missing mandatory fields min_format and max_format
+[05:31:48] [Render thread/INFO]: [skyboxblock] sky target created 1280x800 (rendererOwnsTarget=true)
+[05:31:48] [Render thread/ERROR]: Missing program skyboxblock:clouds_cpu in override list. This is not a critical problem, but it could lead to weird rendering.
+	at knot//com.mojang.blaze3d.opengl.GlDevice.handler$bhe000$iris$redirectIrisProgram(GlDevice.java:571)
+[05:31:48] [Render thread/INFO]: Iris detected, Distant Horizons OpenGL error logging won't be sent in the chat due to Iris throwing known (harmless) OpenGL errors. This is a bug with Iris, not Distant Horizons.
+[05:31:48] [Render thread/INFO]: Shader loaded sucessfully.
+[05:31:48] [Render thread/INFO]: Shader loaded sucessfully.
+[05:31:48] [Render thread/INFO]: Shader loaded sucessfully.
+[05:31:48] [Render thread/INFO]: Shader loaded sucessfully.
+[05:31:48] [Render thread/INFO]: Shader loaded sucessfully.
+[05:31:48] [Render thread/INFO]: Shader loaded sucessfully.
+[05:31:48] [Render thread/ERROR]: Missing program skyboxblock:haze_blit in override list. This is not a critical problem, but it could lead to weird rendering.
+	at knot//com.mojang.blaze3d.opengl.GlDevice.handler$bhe000$iris$redirectIrisProgram(GlDevice.java:571)
+[05:31:48] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:sky_block custom=false texture=null pos=BlockPos{x=0, y=-48, z=4}
+[05:31:48] [Download-1/ERROR]: Failed to retrieve profile key pair
+MinecraftClientHttpException[type=HTTP_ERROR, status=401, response=ErrorResponse[path=/player/certificates, error=null, errorMessage=null, details=null]]
+	at knot//com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:170)
+[05:31:48] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:galaxy_sky_block custom=false texture=skyboxblock:textures/sky/galaxy.png pos=BlockPos{x=0, y=-61, z=4}
+[05:31:48] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:dusk_sky_block custom=false texture=skyboxblock:textures/sky/dusk.png pos=BlockPos{x=1, y=-61, z=4}
+[05:31:48] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:lush_sky_block custom=false texture=skyboxblock:textures/sky/lush.png pos=BlockPos{x=2, y=-61, z=4}
+[05:31:48] [Render thread/INFO]: [skyboxblock] render skin=skyboxblock:white_sky_block custom=false texture=null pos=BlockPos{x=-2, y=-61, z=4}
+[05:31:52] [Render thread/INFO]: [skyboxblock] 云层 CPU 开销：平均 710 µs/帧（224x140，200 帧样本）

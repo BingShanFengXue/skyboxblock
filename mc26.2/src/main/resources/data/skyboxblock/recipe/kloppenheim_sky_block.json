@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    "skyboxblock:sky_block",
+    "minecraft:light_blue_dye"
+  ],
+  "result": {
+    "id": "skyboxblock:kloppenheim_sky_block",
+    "count": 1
+  }
+}

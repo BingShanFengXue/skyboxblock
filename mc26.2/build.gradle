@@ -1,0 +1,182 @@
+// 26.2 移植线 —— 阶段 0（工具链点亮 + API 探针）。
+// 这一版刻意不含任何源码：先证明「MC 26.2 + Loom 1.19.3 + JDK 25 + Fabric API 0.161.0+26.2
+// 能在本机解析、能产出可用的类路径」，再谈搬代码。
+//
+// ⚠ 与 1.21.1 最大的结构性差别（来自 fabric-example-mod 26.2 分支实测）：
+//   1) 插件 id 变成 `net.fabricmc.fabric-loom`（不再是 `fabric-loom`）；
+//   2) **没有 mappings 依赖** —— 26.1 起官方不再混淆，Yarn/Mojang 映射双双退场；
+//   3) `modImplementation` → `implementation`（没有 intermediary 重映射这一步了）。
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+// 多版本支持：`-Pmcver=26.1` 切目标版本（不传时用 gradle.properties 里的 26.2）。
+// 注意必须显式 toString()：Gradle 会把 `26.1` 当数字解析，直接塞进 Loom 会变成 "26"。
+// 多版本支持：环境变量 MCVER 优先（`-Pmcver=26.1` 会被 Gradle 当数字解析成 "26"，实测踩过）。
+def envMc = System.getenv('MCVER')
+def envLoader = System.getenv('LOADERVER')
+def envApi = System.getenv('APIVER')
+if (envMc) ext.minecraft_version = envMc
+if (envLoader) ext.loader_version = envLoader
+if (envApi) ext.fabric_api_version = envApi
+println "[skyboxblock] target minecraft_version = ${project.minecraft_version} (loader ${project.loader_version}, api ${project.fabric_api_version})"
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+// 产物名里直接带目标 MC 版本，避免 26.1 / 26.2 / 26.3 的包混在一起分不清：
+//   skyboxblock-1.0.6-test.1-port.1-mc26.2.jar
+tasks.configureEach { task ->
+    if (task instanceof org.gradle.api.tasks.bundling.AbstractArchiveTask) {
+        task.archiveFileName.set(
+                "${project.archives_base_name}-${project.mod_version}-mc${project.minecraft_version}.jar")
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+// fabric.mod.json 里的 ${version} 必须在这里替换，否则 Loader 会把它当成字面版本号。
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+    filteringCharset = 'UTF-8'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+    it.options.encoding = 'UTF-8'
+    it.options.compilerArgs << '-parameters'
+    // 移植期要把"真实缺口"一次数清楚，javac 默认只报 100 条会掩盖规模。
+    it.options.compilerArgs << '-Xmaxerrs' << '4000'
+    // 切版本靠环境变量 MCVER，Gradle 不会自动把它当输入；不声明会误判 UP-TO-DATE，
+    // 结果 build/libs 里留着上一版本的 class（实测踩过：26.3 的 jar 被当成 26.2 的）。
+    it.inputs.property('targetMinecraftVersion', project.minecraft_version)
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+// 26.1 的 Blaze3D 形状与 26.2 不同（GpuFormat 位置、createRenderPass 的 Optional vs OptionalInt、
+// RenderPass.draw 签名），所以「雾层 / 云层」这四个实现类只在 26.2 编译；
+// 26.1 构建时排除它们，调用方走 SkyLayers 的反射入口（找不到类就跳过）。
+if (project.minecraft_version != '26.2') {
+    def renderLayers = [
+            'client/SkyHazeBlit', 'client/SkyCloudCpu', 'client/SkyCloudPlane', 'client/SkyCloudRay',
+            // 这个 mixin 用 `GameRenderer.mainRenderTarget()`，26.1 没有该方法
+            'mixin/CloudTargetMixin',
+    ].collect { file("src/main/java/dev/yg/skyboxblock/${it}.java").absolutePath } as Set
+    sourceSets.main.java {
+        exclude { element -> renderLayers.contains(element.file.absolutePath) }
+    }
+}
+
+// 26.3 的渲染/资源包接口形状变了（SkyRenderer.render 合并、颜色字段换类型、Pack.ResourcesSupplier 换方法），
+// 无法用反射抹平，因此为它单独放一套实现，并在编译期把 main 里同类的文件排除掉。
+if (project.minecraft_version == '26.3') {
+    def mainHost = file('src/main/java/dev/yg/skyboxblock/client/SkyRendererHost.java').absolutePath
+    def mainBlock = file('src/main/java/dev/yg/skyboxblock/SkyBlock.java').absolutePath
+    def mainProps = file('src/main/java/dev/yg/skyboxblock/BlockPropertyCompat.java').absolutePath
+    sourceSets.main.java {
+        exclude { element ->
+            element.file.absolutePath == mainHost
+                    || element.file.absolutePath == mainBlock
+                    || element.file.absolutePath == mainProps
+        }
+        srcDir 'src/26.3/java'
+    }
+    // 26.3 里 CommandSourceStack 的构造器签名变了，服务端命令回归要单独适配，先在 26.3 构建里排除。
+    def serverCmdTest = file('src/test/java/dev/yg/skyboxblock/server/ServerCommandRegression.java').absolutePath
+    sourceSets.test.java {
+        exclude { element -> element.file.absolutePath == serverCmdTest }
+    }
+}
+
+// 回归套件（纯逻辑，不需要 OpenGL/游戏窗口）：从 1.21.1 主线移植过来，逐个跑并落盘报告。
+[
+        'SkyEnvironmentRegression'      : 'dev.yg.skyboxblock.client.SkyEnvironmentRegression',
+        'SkyTimeRegression'             : 'dev.yg.skyboxblock.client.SkyTimeRegression',
+        'SkyConfigRegression'           : 'dev.yg.skyboxblock.custom.SkyConfigRegression',
+        'ServerCommandRegression'      : 'dev.yg.skyboxblock.server.ServerCommandRegression',
+        'ServerBackendRegression'      : 'dev.yg.skyboxblock.server.SkyboxServerBackendRegression',
+        'SkyUvMathRegression'          : 'dev.yg.skyboxblock.client.SkyUvMathRegression',
+        'SkyStyleMappingRegression'    : 'dev.yg.skyboxblock.client.SkyStyleMappingRegression',
+        'SkyLayersRegression'          : 'dev.yg.skyboxblock.client.SkyLayersRegression',
+        'SkyWindowCoreRegression'      : 'dev.yg.skyboxblock.client.SkyWindowCoreRegression',
+        'SkySceneSemanticsRegression'  : 'dev.yg.skyboxblock.client.SkySceneSemanticsRegression',
+        'SkyClockSourceRegression'     : 'dev.yg.skyboxblock.server.SkyClockSourceRegression',
+].each { taskName, entryPoint ->
+    tasks.register("reg${taskName}", JavaExec) {
+        group = 'verification'
+        description = "Run ${entryPoint}"
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = entryPoint
+        enableAssertions = true
+        if (taskName == 'SkySceneSemanticsRegression') {
+            args project.projectDir.absolutePath
+        } else {
+            args layout.buildDirectory.file("reports/${taskName}.txt").get().asFile.absolutePath
+        }
+    }
+}
+
+// 我们的回归是 main() 型程序（不是 JUnit），Gradle 9 的 test 任务会因为"有测试源但没发现测试"而失败。
+tasks.named('test') {
+    failOnNoDiscoveredTests = false
+}
+
+tasks.register('regLocalizationRegression', JavaExec) {
+    group = 'verification'
+    description = 'Guard BlockItem naming and language parity with the 1.21.1 reference'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.LocalizationRegression'
+    args project.projectDir.absolutePath
+    def reference = file('../skybox-mod')
+    if (reference.isDirectory()) args reference.absolutePath
+}
+
+tasks.register('regAll') {
+    group = 'verification'
+    description = '跑全部纯逻辑回归'
+    dependsOn tasks.named('regSkyEnvironmentRegression'), tasks.named('regSkyTimeRegression'),
+            tasks.named('regSkyConfigRegression'), tasks.named('regServerCommandRegression'),
+            tasks.named('regServerBackendRegression'), tasks.named('regSkyUvMathRegression'),
+            tasks.named('regSkyStyleMappingRegression'), tasks.named('regSkyLayersRegression'),
+            tasks.named('regLocalizationRegression'), tasks.named('regSkyWindowCoreRegression'),
+            tasks.named('regSkySceneSemanticsRegression'), tasks.named('regSkyClockSourceRegression')
+}
+
+// 把编译 classpath 导出成文件：用于 javap / jar tf 直接审计 26.2 的真实 API 面。
+tasks.register('dumpCp') {
+    group = 'verification'
+    description = '把 main 源集的编译 classpath 导出到 build/compile-classpath.txt'
+    def outFile = layout.buildDirectory.file('compile-classpath.txt')
+    def cp = sourceSets.main.compileClasspath
+    doLast {
+        def f = outFile.get().asFile
+        f.parentFile.mkdirs()
+        f.setText(cp.asPath, 'UTF-8')
+        logger.lifecycle("classpath entries: ${cp.files.size()} -> ${f}")
+    }
+}

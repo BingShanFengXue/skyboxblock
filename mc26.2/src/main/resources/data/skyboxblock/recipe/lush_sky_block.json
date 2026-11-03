@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    "skyboxblock:sky_block",
+    "minecraft:green_dye"
+  ],
+  "result": {
+    "id": "skyboxblock:lush_sky_block",
+    "count": 1
+  }
+}

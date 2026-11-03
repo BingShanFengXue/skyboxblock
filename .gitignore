@@ -5,6 +5,15 @@
 /out/
 *.class
 
+# 26.2 移植目录各自的构建产物与本地实例
+/mc26.2/build/
+/mc26.2/.gradle/
+/mc26.2/.gradle-home/
+/mc26.2/logs/
+/mc26.2/output/
+/mc26.2/run/
+/mc26.2/gradle.local.properties
+
 # 运行实例与日志
 /logs/
 /run/
