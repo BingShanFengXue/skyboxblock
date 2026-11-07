@@ -1,0 +1,4 @@
+1.21.1 NativeImage._upload: {'glTexSubImage2D': [], 'glTexImage2D': [], '\\b5121\\b': ['5121'], '\\b32856\\b': [], '\\b6408\\b': []}
+1.21.1 NativeImage.Format <clinit>: {'sipush\\s+6408': ['sipush        6408'], 'sipush\\s+6407': ['sipush        6407'], 'sipush\\s+6403': ['sipush        6403'], 'bipush\\s+8': ['bipush        8'], 'bipush\\s+16': ['bipush        16']}
+26.2 GlTexture: {'glTexImage2D': [], 'glTexSubImage2D': [], '\\b5121\\b': [], '\\b32856\\b': []}
+26.2 GlConst: {'int 32856': ['int 32856'], 'GL_RGBA8': ['GL_RGBA8'], 'int 34842': ['int 34842'], 'GL_RGBA16F': []}

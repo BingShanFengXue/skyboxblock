@@ -286,6 +286,9 @@ public final class R30Probe implements ClientModInitializer {
         result.add("gpuLifetime",R30GpuLifetime.snapshot(true)); result.add("clientCommandResults",clientCommandResults.deepCopy());
         result.add("cloudState",cloudState()); result.add("temporalCapture",R30TemporalCapture.finish());
         result.add("environmentState",environmentState(frame));
+        result.addProperty("windowVisible",GLFW.glfwGetWindowAttrib(mc.getWindow().getWindow(),GLFW.GLFW_VISIBLE)!=0);
+        result.addProperty("windowFocused",GLFW.glfwGetWindowAttrib(mc.getWindow().getWindow(),GLFW.GLFW_FOCUSED)!=0);
+        result.addProperty("mouseGrabbed",mc.mouseHandler.isMouseGrabbed());
         result.addProperty("width",mc.getWindow().getWidth()); result.addProperty("height",mc.getWindow().getHeight());
         result.addProperty("rasterScaleX",frame.rasterScale.x); result.addProperty("rasterScaleY",frame.rasterScale.y);
         result.addProperty("actualActiveWidth",frame.viewport[2]); result.addProperty("actualActiveHeight",frame.viewport[3]);

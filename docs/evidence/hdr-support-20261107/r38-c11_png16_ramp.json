@@ -1,0 +1,21 @@
+{
+  "label": "r38/c11_png16_ramp",
+  "modJar": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\libs\\skyboxblock-1.0.5-test.1-r38.jar",
+  "javaVersion": "25.0.4.1",
+  "imageReaders": "wbmp|png|tif/tiff|gif|jpg/jpeg|bmp",
+  "skyboxesDir": "E:\\DSHworkspace\\DSHminecraft\\tmp-hdr-support-probe\\runs\\c11_png16_ramp\\config\\skyboxblock\\skyboxes",
+  "loadMs": 259,
+  "loadThrew": "",
+  "manifestHash": "b7c21a4e4630ba6b5a04d5ed68ac35ba18c6f51e045581ff3790f63a59b29b64",
+  "styles": [
+    {"id": "skyboxblock:hdr_c11_ramp", "picture": "11_png16_full_ramp.png", "panorama": "skyboxblock:textures/sky/hdr_c11_ramp.png", "displayName": "c11_png16_ramp"}
+  ],
+  "warnings": [
+  ],
+  "generatedTextures": [
+    {"file": "hdr_c11_ramp.png", "bytes": 14530, "width": 1024, "height": 512, "ihdrBitDepth": 8, "ihdrColorType": 6, "decodedImageType": 6, "maxChannelAfterDecode": [251, 251, 251]}
+  ],
+  "generatedBlockIcons": [
+    {"file": "hdr_c11_ramp.png", "bytes": 209, "width": 32, "height": 32, "ihdrBitDepth": 8, "ihdrColorType": 6, "decodedImageType": 6, "maxChannelAfterDecode": [187, 187, 187]}
+  ]
+}

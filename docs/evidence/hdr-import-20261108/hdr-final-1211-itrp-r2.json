@@ -1,0 +1,92 @@
+{
+  "label": "hdr-final-1211-itrp-r2",
+  "version": "1211",
+  "jarSha256": "b1fcb6c41e0fc2f7094e3e34ee00a0fd295af2c79352fd02d8a008cf637e9822",
+  "validation": {
+    "version": "1211",
+    "case": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-itrp-r2",
+    "oracle": {
+      "samples": 3185,
+      "rgbMAE": 0.1520743556947369,
+      "rgbP99": 0.5493229076416537,
+      "rgbMax": 1.3456236574238858,
+      "longitudeShiftNegativeMAE": 22.058169553149103
+    },
+    "pngAB": {
+      "rgbMAE": 0.0,
+      "rgbMax": 0.0
+    },
+    "occlusion": {
+      "centerRGBMAE": 86.37404295051354,
+      "changedPixelShare": 1.0
+    },
+    "folderMatched": true,
+    "background": {
+      "windowVisible": [
+        false,
+        false,
+        false
+      ],
+      "windowFocused": [
+        false,
+        false,
+        false
+      ],
+      "mouseGrabbed": [
+        false,
+        false,
+        false
+      ]
+    },
+    "frameTimes": {
+      "hdr": {
+        "mean": 17.026893515358363,
+        "p50": 16.7231,
+        "p95": 19.2708,
+        "p99": 30.7522,
+        "max": 32.1866,
+        "effectiveFps": 58.73061924642882
+      },
+      "png": {
+        "mean": 17.00242218430034,
+        "p50": 16.6725,
+        "p95": 18.7204,
+        "p99": 30.4196,
+        "max": 31.611,
+        "effectiveFps": 58.815149345213754
+      },
+      "scope": "5s each at 60 FPS cap; CPU wall intervals, not uncapped benchmark"
+    },
+    "gpuBuffers": {
+      "hdr": 246264,
+      "png": 246264
+    },
+    "checks": {
+      "sourceImageNotFlat": true,
+      "displayOracle": true,
+      "negativeControlDetected": true,
+      "pngAB": true,
+      "foregroundPreserved": true,
+      "folder": true,
+      "background": true
+    },
+    "ok": true
+  },
+  "folder": {
+    "matches": [
+      {
+        "hidden": true,
+        "locationURL": "file:///E:/DSHworkspace/DSHminecraft/skybox-mod/build/render-regression/hdr-final-1211-itrp-r2/config/skyboxblock/skyboxes",
+        "hwnd": 919950,
+        "actual": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-itrp-r2\\config\\skyboxblock\\skyboxes",
+        "at": "2026-11-08T00:16:34.5876080+08:00"
+      }
+    ],
+    "expected": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-itrp-r2\\config\\skyboxblock\\skyboxes",
+    "meaning": "Real Explorer LocationURL after actual client command; exact path comparison",
+    "ok": true,
+    "initialWindowCount": 0
+  },
+  "offlineAuthenticationErrorLines": [],
+  "otherErrorLines": []
+}

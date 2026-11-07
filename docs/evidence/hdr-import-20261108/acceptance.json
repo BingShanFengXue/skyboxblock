@@ -1,0 +1,383 @@
+{
+  "packages": [
+    {
+      "version": "1211",
+      "jar": "build\\libs\\skyboxblock-1.0.7-test.1-hdr.jar",
+      "sha256": "b1fcb6c41e0fc2f7094e3e34ee00a0fd295af2c79352fd02d8a008cf637e9822",
+      "metadataVersion": "1.0.7-test.1-hdr",
+      "unchangedRendererAndAssetCount": 141,
+      "unexpectedChangedRenderingEntries": []
+    },
+    {
+      "version": "262",
+      "jar": "mc26.2\\build\\libs\\skyboxblock-1.0.7-test.1-hdr-port.1-mc26.2.jar",
+      "sha256": "79f1c79dd678db98948330b69e62be5f630ea62fa91064e11e1b48fd444bf967",
+      "metadataVersion": "1.0.7-test.1-hdr-port.1",
+      "unchangedRendererAndAssetCount": 150,
+      "unexpectedChangedRenderingEntries": []
+    }
+  ],
+  "checks": {
+    "sourceParity:src/main/java/dev/yg/skyboxblock/custom/RadianceHdr.java": true,
+    "sourceParity:src/main/java/dev/yg/skyboxblock/custom/SkyConfigParser.java": true,
+    "sourceParity:src/test/java/dev/yg/skyboxblock/custom/RadianceHdrRegression.java": true,
+    "sourceParity:src/test/java/dev/yg/skyboxblock/custom/HdrRegistryRegression.java": true,
+    "sourceParity:src/test/java/dev/yg/skyboxblock/custom/SkyConfigRegression.java": true,
+    "localeParity:en_us": true,
+    "localeParity:zh_cn": true,
+    "localeKeyParity": true,
+    "rendererAndAssetsUnchanged:1211": true,
+    "decoderPackaged:1211": true,
+    "productionNoR30Probe:1211": true,
+    "rendererAndAssetsUnchanged:262": true,
+    "decoderPackaged:262": true,
+    "productionNoR30Probe:262": true,
+    "live:hdr-final-1211-r2": true,
+    "finalJarIdentity:hdr-final-1211-r2": true,
+    "noRenderErrors:hdr-final-1211-r2": true,
+    "live:hdr-final-262-r2": true,
+    "finalJarIdentity:hdr-final-262-r2": true,
+    "noRenderErrors:hdr-final-262-r2": true,
+    "live:hdr-final-1211-itrp-r2": true,
+    "finalJarIdentity:hdr-final-1211-itrp-r2": true,
+    "noRenderErrors:hdr-final-1211-itrp-r2": true,
+    "live:hdr-final-262-itrp-r2": true,
+    "finalJarIdentity:hdr-final-262-itrp-r2": true,
+    "noRenderErrors:hdr-final-262-itrp-r2": true,
+    "allFourCases": true
+  },
+  "ok": true,
+  "cases": [
+    {
+      "label": "hdr-final-1211-r2",
+      "version": "1211",
+      "jarSha256": "b1fcb6c41e0fc2f7094e3e34ee00a0fd295af2c79352fd02d8a008cf637e9822",
+      "validation": {
+        "version": "1211",
+        "case": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-r2",
+        "oracle": {
+          "samples": 3185,
+          "rgbMAE": 0.1520743556947369,
+          "rgbP99": 0.5493229076416537,
+          "rgbMax": 1.3456236574238858,
+          "longitudeShiftNegativeMAE": 22.058169553149103
+        },
+        "pngAB": {
+          "rgbMAE": 0.0,
+          "rgbMax": 0.0
+        },
+        "occlusion": {
+          "centerRGBMAE": 91.76830843448491,
+          "changedPixelShare": 1.0
+        },
+        "folderMatched": true,
+        "background": {
+          "windowVisible": [
+            false,
+            false,
+            false
+          ],
+          "windowFocused": [
+            false,
+            false,
+            false
+          ],
+          "mouseGrabbed": [
+            false,
+            false,
+            false
+          ]
+        },
+        "frameTimes": {
+          "hdr": {
+            "mean": 16.934466326530615,
+            "p50": 16.6781,
+            "p95": 18.6778,
+            "p99": 26.4316,
+            "max": 29.1464,
+            "effectiveFps": 59.051167052919546
+          },
+          "png": {
+            "mean": 16.98513037542662,
+            "p50": 16.6917,
+            "p95": 18.3602,
+            "p99": 25.1132,
+            "max": 40.3365,
+            "effectiveFps": 58.87502644352724
+          },
+          "scope": "5s each at 60 FPS cap; CPU wall intervals, not uncapped benchmark"
+        },
+        "gpuBuffers": {
+          "hdr": 246264,
+          "png": 246264
+        },
+        "checks": {
+          "sourceImageNotFlat": true,
+          "displayOracle": true,
+          "negativeControlDetected": true,
+          "pngAB": true,
+          "foregroundPreserved": true,
+          "folder": true,
+          "background": true
+        },
+        "ok": true
+      },
+      "folder": {
+        "matches": [
+          {
+            "hidden": true,
+            "locationURL": "file:///E:/DSHworkspace/DSHminecraft/skybox-mod/build/render-regression/hdr-final-1211-r2/config/skyboxblock/skyboxes",
+            "hwnd": 787600,
+            "actual": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-r2\\config\\skyboxblock\\skyboxes",
+            "at": "2026-11-08T00:14:28.4082316+08:00"
+          }
+        ],
+        "expected": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-r2\\config\\skyboxblock\\skyboxes",
+        "meaning": "Real Explorer LocationURL after actual client command; exact path comparison",
+        "ok": true,
+        "initialWindowCount": 0
+      },
+      "offlineAuthenticationErrorLines": [],
+      "otherErrorLines": []
+    },
+    {
+      "label": "hdr-final-262-r2",
+      "version": "262",
+      "jarSha256": "79f1c79dd678db98948330b69e62be5f630ea62fa91064e11e1b48fd444bf967",
+      "validation": {
+        "version": "262",
+        "case": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-r2",
+        "oracle": {
+          "samples": 3185,
+          "rgbMAE": 0.1509518725799987,
+          "rgbP99": 0.5592670527434582,
+          "rgbMax": 1.6573890539213494,
+          "longitudeShiftNegativeMAE": 22.129045277578538
+        },
+        "pngAB": {
+          "rgbMAE": 0.0,
+          "rgbMax": 0.0
+        },
+        "occlusion": {
+          "centerRGBMAE": 84.28045548654244,
+          "changedPixelShare": 1.0
+        },
+        "folderMatched": true,
+        "background": {
+          "windowVisible": [
+            false,
+            false,
+            false
+          ],
+          "windowFocused": [
+            false,
+            false,
+            false
+          ],
+          "mouseGrabbed": [
+            false,
+            false,
+            false
+          ]
+        },
+        "checks": {
+          "sourceImageNotFlat": true,
+          "displayOracle": true,
+          "negativeControlDetected": true,
+          "pngAB": true,
+          "foregroundPreserved": true,
+          "folder": true,
+          "background": true
+        },
+        "ok": true
+      },
+      "folder": {
+        "matches": [
+          {
+            "hidden": true,
+            "locationURL": "file:///E:/DSHworkspace/DSHminecraft/skybox-mod/mc26.2/build/render-regression/hdr-final-262-r2/game/config/skyboxblock/skyboxes",
+            "hwnd": 983882,
+            "actual": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-r2\\game\\config\\skyboxblock\\skyboxes",
+            "at": "2026-11-08T00:15:11.0996340+08:00"
+          }
+        ],
+        "expected": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-r2\\game\\config\\skyboxblock\\skyboxes",
+        "meaning": "Real Explorer LocationURL after actual client command; exact path comparison",
+        "ok": true,
+        "initialWindowCount": 0
+      },
+      "offlineAuthenticationErrorLines": [
+        "[00:14:54] [Download-2/ERROR]: Failed to fetch user properties",
+        "[00:14:59] [Download-1/ERROR]: Failed to fetch Realms feature flags",
+        "[00:15:03] [Download-1/ERROR]: Failed to retrieve profile key pair"
+      ],
+      "otherErrorLines": []
+    },
+    {
+      "label": "hdr-final-1211-itrp-r2",
+      "version": "1211",
+      "jarSha256": "b1fcb6c41e0fc2f7094e3e34ee00a0fd295af2c79352fd02d8a008cf637e9822",
+      "validation": {
+        "version": "1211",
+        "case": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-itrp-r2",
+        "oracle": {
+          "samples": 3185,
+          "rgbMAE": 0.1520743556947369,
+          "rgbP99": 0.5493229076416537,
+          "rgbMax": 1.3456236574238858,
+          "longitudeShiftNegativeMAE": 22.058169553149103
+        },
+        "pngAB": {
+          "rgbMAE": 0.0,
+          "rgbMax": 0.0
+        },
+        "occlusion": {
+          "centerRGBMAE": 86.37404295051354,
+          "changedPixelShare": 1.0
+        },
+        "folderMatched": true,
+        "background": {
+          "windowVisible": [
+            false,
+            false,
+            false
+          ],
+          "windowFocused": [
+            false,
+            false,
+            false
+          ],
+          "mouseGrabbed": [
+            false,
+            false,
+            false
+          ]
+        },
+        "frameTimes": {
+          "hdr": {
+            "mean": 17.026893515358363,
+            "p50": 16.7231,
+            "p95": 19.2708,
+            "p99": 30.7522,
+            "max": 32.1866,
+            "effectiveFps": 58.73061924642882
+          },
+          "png": {
+            "mean": 17.00242218430034,
+            "p50": 16.6725,
+            "p95": 18.7204,
+            "p99": 30.4196,
+            "max": 31.611,
+            "effectiveFps": 58.815149345213754
+          },
+          "scope": "5s each at 60 FPS cap; CPU wall intervals, not uncapped benchmark"
+        },
+        "gpuBuffers": {
+          "hdr": 246264,
+          "png": 246264
+        },
+        "checks": {
+          "sourceImageNotFlat": true,
+          "displayOracle": true,
+          "negativeControlDetected": true,
+          "pngAB": true,
+          "foregroundPreserved": true,
+          "folder": true,
+          "background": true
+        },
+        "ok": true
+      },
+      "folder": {
+        "matches": [
+          {
+            "hidden": true,
+            "locationURL": "file:///E:/DSHworkspace/DSHminecraft/skybox-mod/build/render-regression/hdr-final-1211-itrp-r2/config/skyboxblock/skyboxes",
+            "hwnd": 919950,
+            "actual": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-itrp-r2\\config\\skyboxblock\\skyboxes",
+            "at": "2026-11-08T00:16:34.5876080+08:00"
+          }
+        ],
+        "expected": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\render-regression\\hdr-final-1211-itrp-r2\\config\\skyboxblock\\skyboxes",
+        "meaning": "Real Explorer LocationURL after actual client command; exact path comparison",
+        "ok": true,
+        "initialWindowCount": 0
+      },
+      "offlineAuthenticationErrorLines": [],
+      "otherErrorLines": []
+    },
+    {
+      "label": "hdr-final-262-itrp-r2",
+      "version": "262",
+      "jarSha256": "79f1c79dd678db98948330b69e62be5f630ea62fa91064e11e1b48fd444bf967",
+      "validation": {
+        "version": "262",
+        "case": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-itrp-r2",
+        "oracle": {
+          "samples": 3185,
+          "rgbMAE": 0.15095187257999843,
+          "rgbP99": 0.5592670527434122,
+          "rgbMax": 1.6573890539213494,
+          "longitudeShiftNegativeMAE": 22.12904527757854
+        },
+        "pngAB": {
+          "rgbMAE": 0.0,
+          "rgbMax": 0.0
+        },
+        "occlusion": {
+          "centerRGBMAE": 87.2024982746722,
+          "changedPixelShare": 1.0
+        },
+        "folderMatched": true,
+        "background": {
+          "windowVisible": [
+            false,
+            false,
+            false
+          ],
+          "windowFocused": [
+            false,
+            false,
+            false
+          ],
+          "mouseGrabbed": [
+            false,
+            false,
+            false
+          ]
+        },
+        "checks": {
+          "sourceImageNotFlat": true,
+          "displayOracle": true,
+          "negativeControlDetected": true,
+          "pngAB": true,
+          "foregroundPreserved": true,
+          "folder": true,
+          "background": true
+        },
+        "ok": true
+      },
+      "folder": {
+        "matches": [
+          {
+            "hidden": true,
+            "locationURL": "file:///E:/DSHworkspace/DSHminecraft/skybox-mod/mc26.2/build/render-regression/hdr-final-262-itrp-r2/game/config/skyboxblock/skyboxes",
+            "hwnd": 395702,
+            "actual": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-itrp-r2\\game\\config\\skyboxblock\\skyboxes",
+            "at": "2026-11-08T00:17:37.3233690+08:00"
+          }
+        ],
+        "expected": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-itrp-r2\\game\\config\\skyboxblock\\skyboxes",
+        "meaning": "Real Explorer LocationURL after actual client command; exact path comparison",
+        "ok": true,
+        "initialWindowCount": 0
+      },
+      "offlineAuthenticationErrorLines": [
+        "[00:17:08] [Download-2/ERROR]: Failed to fetch user properties",
+        "[00:17:18] [Download-1/ERROR]: Failed to fetch Realms feature flags",
+        "[00:17:29] [Download-1/ERROR]: Failed to retrieve profile key pair"
+      ],
+      "otherErrorLines": []
+    }
+  ],
+  "scope": "Radiance .hdr startup import to 8-bit display sRGB; exact runtime render path unchanged; native + pinned Iris/ITRP/FSR2, Windows OpenGL; not native floating-point HDR output, EXR, or general uncapped performance certification"
+}

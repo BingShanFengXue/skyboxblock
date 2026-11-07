@@ -35,6 +35,7 @@ public final class CustomSkyRegistry {
     private static final int MAX_STYLES = 64;
     private static final long MAX_FILE_BYTES = 64 * 1024;
     private static final long MAX_IMAGE_BYTES = 16L * 1024 * 1024;
+    private static final long MAX_HDR_BYTES = 40L * 1024 * 1024;
     private static final int MAX_IMAGE_WIDTH = 4096;
     private static final int MAX_IMAGE_HEIGHT = 2048;
 
@@ -132,8 +133,10 @@ public final class CustomSkyRegistry {
             return false;
         }
         try {
-            if (Files.size(picture) > MAX_IMAGE_BYTES) {
-                WARNINGS.add(fileName + ": 图片 " + spec.picture() + " 超过 16 MB，已跳过 " + spec.id());
+            long maxBytes = isRadianceHdr(picture) ? MAX_HDR_BYTES : MAX_IMAGE_BYTES;
+            if (Files.size(picture) > maxBytes) {
+                WARNINGS.add(fileName + ": 图片 " + spec.picture() + " 超过 "
+                        + (maxBytes / (1024 * 1024)) + " MiB，已跳过 " + spec.id());
                 return false;
             }
         } catch (IOException error) {
@@ -163,8 +166,17 @@ public final class CustomSkyRegistry {
         String ns = id.getNamespace();
         String path = id.getPath();
         BufferedImage image;
-        try (InputStream input = Files.newInputStream(picture)) {
-            image = ImageIO.read(input);
+        if (isRadianceHdr(picture)) {
+            RadianceHdr.Decoded decoded = RadianceHdr.decode(Files.readAllBytes(picture),
+                    MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT);
+            image = decoded.image();
+            SkyboxBlockMod.LOGGER.info("[skyboxblock] HDR {}: {}x{}, exposure={}, medianLuminance={}",
+                    picture.getFileName(), image.getWidth(), image.getHeight(),
+                    decoded.exposure(), decoded.medianLuminance());
+        } else {
+            try (InputStream input = Files.newInputStream(picture)) {
+                image = ImageIO.read(input);
+            }
         }
         if (image == null) {
             WARNINGS.add("图片无法解析（需要 PNG）：" + picture.getFileName());
@@ -265,6 +277,10 @@ public final class CustomSkyRegistry {
         } catch (RuntimeException | java.security.NoSuchAlgorithmException error) {
             return "unavailable";
         }
+    }
+
+    private static boolean isRadianceHdr(Path picture) {
+        return picture.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".hdr");
     }
 
     /** Two deterministic panorama examples plus the documented example config; never overwritten. */

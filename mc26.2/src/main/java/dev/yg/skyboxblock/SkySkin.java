@@ -7,11 +7,13 @@ import net.minecraft.resources.Identifier;
  * from the `config/skyboxblock/skyboxes` folder and are registered at start-up, so they must not be
  * modelled as enum constants.
  *
- * <p>{@code material} keeps the shader-side @{code SkyMaterial} uniform meaningful for the built-in
- * styles (their enum ordinal is referenced by the regression negative control); custom styles pass
- * {@code -1} because they are identified by their texture instead.
+ * <p>Every surface has a nonnegative shader material identity. Built-ins retain their stable enum
+ * ordinals; custom IDs occupy a separate range. Coverage stores material + 1, reserving zero for
+ * empty pixels, so a rear custom batch cannot claim a different front surface.
  */
 public record SkySkin(String id, int shaderMode, Identifier texture, int material) {
+    private static final int CUSTOM_START = SkyStyle.values().length;
+    private static final java.util.Map<String, Integer> CUSTOM_MATERIALS = new java.util.LinkedHashMap<>();
     public static SkySkin of(SkyStyle style) {
         return new SkySkin(SkyboxBlockMod.MOD_ID + ":" + style.blockId(), style.shaderMode(),
                 style.panorama() == null ? null : SkyboxBlockMod.id("textures/sky/" + style.panorama() + ".png"),
@@ -19,11 +21,13 @@ public record SkySkin(String id, int shaderMode, Identifier texture, int materia
     }
 
     /** Panoramic custom style: shaderMode 3 samples {@code texture} through the equirect mapping. */
-    public static SkySkin custom(String id, Identifier texture) {
-        return new SkySkin(id, 3, texture, -1);
+    public static synchronized SkySkin custom(String id, Identifier texture) {
+        int material = CUSTOM_MATERIALS.computeIfAbsent(id,
+                ignored -> Math.addExact(CUSTOM_START, CUSTOM_MATERIALS.size()));
+        return new SkySkin(id, 3, texture, material);
     }
 
-    public boolean isCustom() { return material < 0; }
+    public boolean isCustom() { return material >= CUSTOM_START; }
 
     /** Styles whose sky is dark enough that the exposure meter must be corrected. */
     public boolean darkSky() {

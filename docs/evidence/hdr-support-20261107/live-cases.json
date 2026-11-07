@@ -1,0 +1,13 @@
+[
+  {
+    "name": "1211-hdr-renamed-png",
+    "version": "Rapid Optimization",
+    "mod": "skybox-mod/build/libs/skyboxblock-1.0.5-test.1-r38.jar",
+    "java": "E:/DSHworkspace/DSHminecraft/.jdks/jdk-21.0.12.1+1/bin/java.exe",
+    "jvm": ["-Dskyboxblock.debug=true"],
+    "id": "skyboxblock:probe_hdr_renamed",
+    "picture": "03_radiance_hdr_renamed.png",
+    "materials": ["03_radiance_hdr_renamed.png"],
+    "timeout": 300
+  }
+]

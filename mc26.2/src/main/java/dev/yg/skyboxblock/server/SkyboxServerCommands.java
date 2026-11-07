@@ -51,6 +51,11 @@ import java.util.concurrent.CompletableFuture;
  * <p>{@code <attribute>} accepts the three id forms ({@code sky_color}, {@code visual/sky_color},
  * {@code minecraft:visual/sky_color}) because {@link SkyEnvironment#attribute(String)} resolves all
  * of them, while the TAB suggestion lists only the form matching what the player typed.
+ *
+ * <p>Every user-facing sentence is a {@link Component} built by {@link #localized}: the lang keys
+ * live in {@code assets/skyboxblock/lang} (en_us + zh_cn), while the {@code fallback} argument keeps
+ * the Chinese wording for sources that render without a language table (dedicated-server console,
+ * headless command regression). Pure data lines such as {@code id = value} stay plain literals.
  */
 public final class SkyboxServerCommands {
     private SkyboxServerCommands() { }
@@ -138,9 +143,14 @@ public final class SkyboxServerCommands {
         var store = store(source);
         for (var player : players) {
             var effective = store.settingsFor(player.getUUID());
-            source.sendSuccess(() -> Component.literal(player.getScoreboardName() + "："
-                    + (store.hasOverride(player.getUUID()) ? "有独立覆盖" : "跟随服务器")
-                    + "，revision " + effective.revision()), false);
+            boolean override = store.hasOverride(player.getUUID());
+            String name = player.getScoreboardName();
+            String revision = String.valueOf(effective.revision());
+            source.sendSuccess(() -> override
+                    ? localized("command.skyboxblock.server.player.show.override",
+                            "%s：有独立覆盖，revision %s", name, revision)
+                    : localized("command.skyboxblock.server.player.show.server",
+                            "%s：跟随服务器，revision %s", name, revision), false);
         }
         return players.size();
     }
@@ -152,12 +162,15 @@ public final class SkyboxServerCommands {
             try {
                 store.setPlayerEnvironment(player.getUUID(), attribute.id(), raw);
             } catch (IOException error) {
-                return failure(source, message(error));
+                return failure(source, localized("command.skyboxblock.server.player.set.failed",
+                        "写入玩家覆盖失败：%s", message(error)));
             } catch (IllegalArgumentException invalid) {
-                return failure(source, "无效值：" + invalid.getMessage());
+                return failure(source, localized("command.skyboxblock.server.player.invalid_value",
+                        "无效值：%s", message(invalid)));
             }
         }
-        return success(source, "已为 " + players.size() + " 名玩家设置 " + attribute.id() + " = " + raw);
+        return success(source, localized("command.skyboxblock.server.player.set.done",
+                "已为 %s 名玩家设置 %s = %s", players.size(), attribute.id(), raw));
     }
 
     private static int playerReset(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players,
@@ -167,12 +180,15 @@ public final class SkyboxServerCommands {
             try {
                 store.resetPlayerEnvironment(player.getUUID(), attribute.id());
             } catch (IOException error) {
-                return failure(source, message(error));
+                return failure(source, localized("command.skyboxblock.server.player.reset.failed",
+                        "清除玩家覆盖失败：%s", message(error)));
             } catch (IllegalArgumentException invalid) {
-                return failure(source, "无效值：" + invalid.getMessage());
+                return failure(source, localized("command.skyboxblock.server.player.invalid_value",
+                        "无效值：%s", message(invalid)));
             }
         }
-        return success(source, "已为 " + players.size() + " 名玩家清除 " + attribute.id());
+        return success(source, localized("command.skyboxblock.server.player.reset.done",
+                "已为 %s 名玩家清除 %s", players.size(), attribute.id()));
     }
 
     private static int playerResetAll(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players) {
@@ -181,10 +197,12 @@ public final class SkyboxServerCommands {
             try {
                 store.resetPlayerAll(player.getUUID());
             } catch (IOException error) {
-                return failure(source, message(error));
+                return failure(source, localized("command.skyboxblock.server.player.reset.failed",
+                        "清除玩家覆盖失败：%s", message(error)));
             }
         }
-        return success(source, "已清除 " + players.size() + " 名玩家的全部覆盖");
+        return success(source, localized("command.skyboxblock.server.player.reset.all_done",
+                "已清除 %s 名玩家的全部覆盖", players.size()));
     }
 
     private static int playerTimeSet(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players,
@@ -194,7 +212,8 @@ public final class SkyboxServerCommands {
             ticks = Integer.parseInt(raw.trim());
             if (ticks < 0 || ticks > 24000) throw new NumberFormatException();
         } catch (NumberFormatException error) {
-            return failure(source, "tick 必须是 0–24000 的整数：" + raw);
+            return failure(source, localized("command.skyboxblock.server.player.time.invalid_ticks",
+                    "tick 必须是 0–24000 的整数：%s", raw));
         }
         var store = store(source);
         long now = SkyboxServerConfig.gameTime(source);
@@ -202,10 +221,12 @@ public final class SkyboxServerCommands {
             try {
                 store.setPlayerTime(player.getUUID(), ticks, now);
             } catch (IOException | IllegalArgumentException error) {
-                return failure(source, message(error));
+                return failure(source, localized("command.skyboxblock.server.player.time.failed",
+                        "写入玩家天空时间失败：%s", message(error)));
             }
         }
-        return success(source, "已为 " + players.size() + " 名玩家设置天空时间 " + ticks);
+        return success(source, localized("command.skyboxblock.server.player.time.done",
+                "已为 %s 名玩家设置天空时间 %s", players.size(), ticks));
     }
 
     private static int playerTimeReset(CommandSourceStack source, java.util.List<net.minecraft.server.level.ServerPlayer> players) {
@@ -214,18 +235,22 @@ public final class SkyboxServerCommands {
             try {
                 store.resetPlayerEnvironment(player.getUUID(), "skybox.time");
             } catch (IOException error) {
-                return failure(source, message(error));
+                return failure(source, localized("command.skyboxblock.server.player.time.failed",
+                        "写入玩家天空时间失败：%s", message(error)));
             } catch (IllegalArgumentException notAnEnvironmentAttribute) {
-                return failure(source, "该版本暂不支持按玩家重置时间，请用 reset all");
+                return failure(source, localized("command.skyboxblock.server.player.time.unsupported",
+                        "该版本暂不支持按玩家重置时间，请用 reset all"));
             }
         }
-        return success(source, "已为 " + players.size() + " 名玩家清除时间覆盖");
+        return success(source, localized("command.skyboxblock.server.player.time.reset_done",
+                "已为 %s 名玩家清除时间覆盖", players.size()));
     }
 
     private static int playerGet(CommandSourceStack source, SkyEnvironment.Attribute attribute) {
         if (source.getEntity() instanceof net.minecraft.server.level.ServerPlayer self)
             return playerShowAttribute(source, java.util.List.of(self), attribute);
-        return failure(source, "该指令需要玩家执行；请使用 /skyboxblock player <targets> <属性>");
+        return failure(source, localized("command.skyboxblock.server.player.needs_player",
+                "该指令需要玩家执行；请使用 /skyboxblock player <targets> <属性>"));
     }
 
     /** Prints one attribute for every target, marking whether it comes from a player override. */
@@ -236,9 +261,13 @@ public final class SkyboxServerCommands {
         for (var player : players) {
             var settings = store.settingsFor(player.getUUID());
             String value = effective(settings.environment(), attribute);
-            String scope = store.hasOverride(player.getUUID()) ? "（玩家覆盖）" : "（跟随服务器）";
-            source.sendSuccess(() -> Component.literal(player.getScoreboardName() + "："
-                    + attribute.id() + " = " + value + scope), false);
+            boolean override = store.hasOverride(player.getUUID());
+            String name = player.getScoreboardName();
+            source.sendSuccess(() -> override
+                    ? localized("command.skyboxblock.server.player.attribute.override",
+                            "%s：%s = %s（玩家覆盖）", name, attribute.id(), value)
+                    : localized("command.skyboxblock.server.player.attribute.server",
+                            "%s：%s = %s（跟随服务器）", name, attribute.id(), value), false);
         }
         return players.size();
     }
@@ -376,52 +405,79 @@ public final class SkyboxServerCommands {
         try {
             return success(source, describeTime(source, store(source)));
         } catch (RuntimeException exception) {
-            return failure(source, "读取时间失败：" + message(exception));
+            return failure(source, localized("command.skyboxblock.server.time.read_failed",
+                    "读取时间失败：%s", message(exception)));
         }
     }
 
     private static int timeSet(CommandSourceStack source, String raw) {
         try {
-            final int ticks=timeTicks(raw);
-            return timeChange(source, "设置时间失败：", store -> store.setTime(ticks, gameTime(source)));
-        } catch(IllegalArgumentException invalid) { return failure(source,"设置时间失败："+message(invalid)); }
+            final int ticks = timeTicks(raw);
+            return timeChange(source, "command.skyboxblock.server.time.set_failed", "设置时间失败：%s",
+                    store -> store.setTime(ticks, gameTime(source)));
+        } catch (TimeArgumentException rejected) {
+            return failure(source, rejected.reply());
+        } catch (IllegalArgumentException invalid) {
+            return failure(source, localized("command.skyboxblock.server.time.set_failed",
+                    "设置时间失败：%s", message(invalid)));
+        }
     }
 
     private static int timeLock(CommandSourceStack source, String raw) {
         try {
-            final Integer ticks=raw == null ? null : Integer.valueOf(timeTicks(raw));
-            return timeChange(source, "锁定时间失败：",
+            final Integer ticks = raw == null ? null : Integer.valueOf(timeTicks(raw));
+            return timeChange(source, "command.skyboxblock.server.time.lock_failed", "锁定时间失败：%s",
                     store -> store.lockTime(ticks, gameTime(source), automaticTicks(source)));
-        } catch(IllegalArgumentException invalid) { return failure(source,"锁定时间失败："+message(invalid)); }
+        } catch (TimeArgumentException rejected) {
+            return failure(source, rejected.reply());
+        } catch (IllegalArgumentException invalid) {
+            return failure(source, localized("command.skyboxblock.server.time.lock_failed",
+                    "锁定时间失败：%s", message(invalid)));
+        }
     }
 
     private static int timeUnlock(CommandSourceStack source) {
-        return timeChange(source, "解除时间锁定失败：", store -> store.unlockTime(gameTime(source)));
+        return timeChange(source, "command.skyboxblock.server.time.unlock_failed", "解除时间锁定失败：%s",
+                store -> store.unlockTime(gameTime(source)));
     }
 
     private static int timeReset(CommandSourceStack source) {
-        return timeChange(source, "重置时间设置失败：", SkyboxServerConfig.Store::resetTime);
+        return timeChange(source, "command.skyboxblock.server.time.reset_failed", "重置时间设置失败：%s",
+                SkyboxServerConfig.Store::resetTime);
     }
 
     private static int timeUsage(CommandSourceStack source) {
-        return failure(source, "用法：/skyboxblock environment time set <0..23999 或 " + TIME_PRESET_HELP + ">");
+        return failure(source, localized("command.skyboxblock.server.time.usage",
+                "用法：/skyboxblock environment time set <0..23999 或 %s>", TIME_PRESET_HELP));
     }
 
     /** Runs one time mutation, then reports the short effective description. */
-    private static int timeChange(CommandSourceStack source, String failurePrefix, TimeWrite write) {
+    private static int timeChange(CommandSourceStack source, String failureKey, String failureFallback, TimeWrite write) {
         try {
             SkyboxServerConfig.Store store = store(source);
             write.run(store);
             return success(source, describeTime(source, store));
         } catch (IOException | RuntimeException exception) {
-            return failure(source, failurePrefix + message(exception));
+            return failure(source, localized(failureKey, failureFallback, message(exception)));
         }
     }
 
     @FunctionalInterface
     private interface TimeWrite { void run(SkyboxServerConfig.Store store) throws IOException; }
 
-    /** Parses a tick count or one of the fixed presets; range errors are user-facing (Chinese). */
+    /** A rejected time argument: the user-facing reply is already localised, the message stays a diagnostic. */
+    private static final class TimeArgumentException extends IllegalArgumentException {
+        private final transient Component reply;
+
+        TimeArgumentException(Component reply, String diagnostic) {
+            super(diagnostic);
+            this.reply = reply;
+        }
+
+        Component reply() { return reply; }
+    }
+
+    /** Parses a tick count or one of the fixed presets; a rejected argument carries a localised reply. */
     static int timeTicks(String raw) {
         String text = raw == null ? "" : raw.trim();
         Integer preset = TIME_PRESETS.get(text.toLowerCase(Locale.ROOT));
@@ -429,10 +485,16 @@ public final class SkyboxServerCommands {
         int ticks;
         try { ticks = Integer.parseInt(text); }
         catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("未知时刻：" + text + "（可用 " + TIME_PRESET_HELP + "，或 0..23999）");
+            throw new TimeArgumentException(
+                    localized("command.skyboxblock.server.time.unknown_moment",
+                            "未知时刻：%s（可用 %s，或 0..23999）", text, TIME_PRESET_HELP),
+                    "unknown time '" + text + "'");
         }
         if (ticks < 0 || ticks >= SkyTimeClock.DAY)
-            throw new IllegalArgumentException("时刻须为 0..23999，收到 " + ticks);
+            throw new TimeArgumentException(
+                    localized("command.skyboxblock.server.time.out_of_range",
+                            "时刻须为 0..23999，收到 %s", ticks),
+                    "tick out of range: " + ticks);
         return ticks;
     }
 
@@ -444,14 +506,31 @@ public final class SkyboxServerCommands {
 
     // ── feedback ──────────────────────────────────────────────────────────────────────────
 
-    private static int success(CommandSourceStack source, String text) {
-        source.sendSuccess(() -> Component.literal(text), false);
+    /**
+     * Localised feedback. {@code key} names a lang entry under {@code command.skyboxblock.server.*};
+     * {@code fallback} keeps the original Chinese wording so a source that renders without a language
+     * table (server console, headless regression) still prints formatted, readable text.
+     */
+    private static Component localized(String key, String fallback, Object... arguments) {
+        return Component.translatableWithFallback(key, fallback, arguments);
+    }
+
+    private static int success(CommandSourceStack source, Component text) {
+        source.sendSuccess(() -> text, false);
         return 1;
     }
 
-    private static int failure(CommandSourceStack source, String text) {
-        source.sendFailure(Component.literal(text));
+    private static int success(CommandSourceStack source, String text) {
+        return success(source, Component.literal(text));
+    }
+
+    private static int failure(CommandSourceStack source, Component text) {
+        source.sendFailure(text);
         return 0;
+    }
+
+    private static int failure(CommandSourceStack source, String text) {
+        return failure(source, Component.literal(text));
     }
 
     private static String message(Throwable failure) {
@@ -460,10 +539,12 @@ public final class SkyboxServerCommands {
     }
 
     private static int usage(CommandSourceStack source) {
-        success(source, "/skyboxblock environment|env list · get <attribute> · set <attribute> <value>"
-                + " · reset <attribute> · reset all · reload · time get|set|lock|unlock|reset"
-                + "（修改需权限等级 " + MUTATION_LEVEL + "）");
-        return success(source, "服务器统一生效，所有玩家同步；查询无需权限");
+        success(source, localized("command.skyboxblock.server.usage.syntax",
+                "/skyboxblock environment|env list · get <attribute> · set <attribute> <value>"
+                        + " · reset <attribute> · reset all · reload · time get|set|lock|unlock|reset"
+                        + "（修改需权限等级 %s）", MUTATION_LEVEL));
+        return success(source, localized("command.skyboxblock.server.usage.scope",
+                "服务器统一生效，所有玩家同步；查询无需权限"));
     }
 
     private static int list(CommandSourceStack source) {
@@ -471,56 +552,66 @@ public final class SkyboxServerCommands {
         // Read-only path: forSource/settings() throw unchecked exceptions only, never IOException.
         try { environment = store(source).settings().environment(); }
         catch (RuntimeException exception) {
-            return failure(source, "读取配置失败：" + message(exception));
+            return failure(source, localized("command.skyboxblock.server.read.failed",
+                    "读取配置失败：%s", message(exception)));
         }
-        success(source, "原版天空盒环境属性（服务器统一，共 " + SkyEnvironment.attributes().size()
-                + " 项；auto = 未覆盖）");
+        success(source, localized("command.skyboxblock.server.list.header",
+                "原版天空盒环境属性（服务器统一，共 %s 项；auto = 未覆盖）", SkyEnvironment.attributes().size()));
         for (SkyEnvironment.Attribute attribute : SkyEnvironment.attributes())
             success(source, "  " + attribute.id() + " = " + effective(environment, attribute));
-        return success(source, "用法 /skyboxblock environment get|set|reset <attribute> [value]；"
-                + "reset all 全部 auto；reload 重读配置");
+        return success(source, localized("command.skyboxblock.server.list.usage",
+                "用法 /skyboxblock environment get|set|reset <attribute> [value]；"
+                        + "reset all 全部 auto；reload 重读配置"));
     }
 
-    /** One line: {@code id = value}. */
+    /** One line: {@code id = value}. Data, so it stays a plain literal in every language. */
     private static int get(CommandSourceStack source, SkyEnvironment.Attribute attribute) {
-        if (attribute == null) return failure(source, "未知的环境属性");
+        if (attribute == null) return failure(source, localized("command.skyboxblock.server.get.unknown",
+                "未知的环境属性"));
         // Read-only path: the snapshot accessors never throw IOException.
         try {
             return success(source, attribute.id() + " = " + effective(store(source).settings().environment(), attribute));
         } catch (RuntimeException exception) {
-            return failure(source, "读取配置失败：" + message(exception));
+            return failure(source, localized("command.skyboxblock.server.read.failed",
+                    "读取配置失败：%s", message(exception)));
         }
     }
 
     private static int missingValue(CommandSourceStack source, SkyEnvironment.Attribute attribute) {
-        return failure(source, "用法：/skyboxblock environment set " + attribute.id() + " <value>");
+        return failure(source, localized("command.skyboxblock.server.set.usage",
+                "用法：/skyboxblock environment set %s <value>", attribute.id()));
     }
 
     private static int set(CommandSourceStack source, SkyEnvironment.Attribute attribute, String raw) {
-        if (attribute == null) return failure(source, "未知的环境属性，未修改设置");
+        if (attribute == null) return failure(source, localized("command.skyboxblock.server.set.unknown",
+                "未知的环境属性，未修改设置"));
         if (raw != null && raw.trim().equalsIgnoreCase(SkyEnvironment.AUTO)) return reset(source, attribute);
         String text;
         try { text = SkyEnvironment.parse(attribute, raw).text(); }
         catch (IllegalArgumentException exception) {
-            return failure(source, "设置失败：" + exception.getMessage() + "（设置未改动）");
+            return failure(source, localized("command.skyboxblock.server.set.invalid",
+                    "设置失败：%s（设置未改动）", message(exception)));
         }
         try {
             SkyboxServerConfig.Store store = store(source);
             store.setEnvironment(attribute.id(), text);
             return success(source, attribute.id() + " = " + effective(store.settings().environment(), attribute));
         } catch (IOException | RuntimeException exception) {
-            return failure(source, "环境属性保存失败：" + message(exception));
+            return failure(source, localized("command.skyboxblock.server.set.save_failed",
+                    "环境属性保存失败：%s", message(exception)));
         }
     }
 
     private static int reset(CommandSourceStack source, SkyEnvironment.Attribute attribute) {
-        if (attribute == null) return failure(source, "未知的环境属性，未修改设置");
+        if (attribute == null) return failure(source, localized("command.skyboxblock.server.set.unknown",
+                "未知的环境属性，未修改设置"));
         try {
             SkyboxServerConfig.Store store = store(source);
             store.resetEnvironment(attribute.id());
             return success(source, attribute.id() + " = " + effective(store.settings().environment(), attribute));
         } catch (IOException | RuntimeException exception) {
-            return failure(source, "环境属性重置失败：" + message(exception));
+            return failure(source, localized("command.skyboxblock.server.reset.failed",
+                    "环境属性重置失败：%s", message(exception)));
         }
     }
 
@@ -528,18 +619,22 @@ public final class SkyboxServerCommands {
         try {
             store(source).resetAll();
         } catch (IOException | RuntimeException exception) {
-            return failure(source, "环境属性全部重置失败：" + message(exception));
+            return failure(source, localized("command.skyboxblock.server.reset.all_failed",
+                    "环境属性全部重置失败：%s", message(exception)));
         }
-        return success(source, "全部环境属性 = auto");
+        return success(source, localized("command.skyboxblock.server.reset.all_done",
+                "全部环境属性 = auto"));
     }
 
     private static int reload(CommandSourceStack source) {
         try {
             SkyboxServerConfig.Store store = store(source);
             store.reload();
-            return success(source, "已重读配置；环境覆盖 " + store.settings().environment().overrides().size() + " 项");
+            return success(source, localized("command.skyboxblock.server.reload.done",
+                    "已重读配置；环境覆盖 %s 项", store.settings().environment().overrides().size()));
         } catch (IOException | RuntimeException exception) {
-            return failure(source, "重读配置失败：" + message(exception));
+            return failure(source, localized("command.skyboxblock.server.reload.failed",
+                    "重读配置失败：%s", message(exception)));
         }
     }
 

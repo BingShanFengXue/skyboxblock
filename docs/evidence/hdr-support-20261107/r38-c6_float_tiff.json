@@ -1,0 +1,19 @@
+{
+  "label": "r38/c6_float_tiff",
+  "modJar": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\libs\\skyboxblock-1.0.5-test.1-r38.jar",
+  "javaVersion": "25.0.4.1",
+  "imageReaders": "wbmp|png|tif/tiff|gif|jpg/jpeg|bmp",
+  "skyboxesDir": "E:\\DSHworkspace\\DSHminecraft\\tmp-hdr-support-probe\\runs\\c6_float_tiff\\config\\skyboxblock\\skyboxes",
+  "loadMs": 337,
+  "loadThrew": "",
+  "manifestHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "styles": [
+  ],
+  "warnings": [
+    "10_case.conf: 处理图片 06_float32_tiff_renamed.png 失败：Index 65694 out of bounds for length 65536"
+  ],
+  "generatedTextures": [
+  ],
+  "generatedBlockIcons": [
+  ]
+}

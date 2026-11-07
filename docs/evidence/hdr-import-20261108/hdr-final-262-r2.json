@@ -1,0 +1,73 @@
+{
+  "label": "hdr-final-262-r2",
+  "version": "262",
+  "jarSha256": "79f1c79dd678db98948330b69e62be5f630ea62fa91064e11e1b48fd444bf967",
+  "validation": {
+    "version": "262",
+    "case": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-r2",
+    "oracle": {
+      "samples": 3185,
+      "rgbMAE": 0.1509518725799987,
+      "rgbP99": 0.5592670527434582,
+      "rgbMax": 1.6573890539213494,
+      "longitudeShiftNegativeMAE": 22.129045277578538
+    },
+    "pngAB": {
+      "rgbMAE": 0.0,
+      "rgbMax": 0.0
+    },
+    "occlusion": {
+      "centerRGBMAE": 84.28045548654244,
+      "changedPixelShare": 1.0
+    },
+    "folderMatched": true,
+    "background": {
+      "windowVisible": [
+        false,
+        false,
+        false
+      ],
+      "windowFocused": [
+        false,
+        false,
+        false
+      ],
+      "mouseGrabbed": [
+        false,
+        false,
+        false
+      ]
+    },
+    "checks": {
+      "sourceImageNotFlat": true,
+      "displayOracle": true,
+      "negativeControlDetected": true,
+      "pngAB": true,
+      "foregroundPreserved": true,
+      "folder": true,
+      "background": true
+    },
+    "ok": true
+  },
+  "folder": {
+    "matches": [
+      {
+        "hidden": true,
+        "locationURL": "file:///E:/DSHworkspace/DSHminecraft/skybox-mod/mc26.2/build/render-regression/hdr-final-262-r2/game/config/skyboxblock/skyboxes",
+        "hwnd": 983882,
+        "actual": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-r2\\game\\config\\skyboxblock\\skyboxes",
+        "at": "2026-11-08T00:15:11.0996340+08:00"
+      }
+    ],
+    "expected": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\mc26.2\\build\\render-regression\\hdr-final-262-r2\\game\\config\\skyboxblock\\skyboxes",
+    "meaning": "Real Explorer LocationURL after actual client command; exact path comparison",
+    "ok": true,
+    "initialWindowCount": 0
+  },
+  "offlineAuthenticationErrorLines": [
+    "[00:14:54] [Download-2/ERROR]: Failed to fetch user properties",
+    "[00:14:59] [Download-1/ERROR]: Failed to fetch Realms feature flags",
+    "[00:15:03] [Download-1/ERROR]: Failed to retrieve profile key pair"
+  ],
+  "otherErrorLines": []
+}

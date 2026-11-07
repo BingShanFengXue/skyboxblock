@@ -1,5 +1,20 @@
 # Sky Box Block（天空盒方块）
 
+## 自定义天空材质前后遮挡修复（2026-11-08）
+
+当前修复构建为 **1.0.7-test.2-owner**（1.21.1）与 **1.0.7-test.2-owner-port.1-mc26.2**。修复 ITRP 特定视角下前排自定义天空出现后排浅灰轮廓；普通 PNG 和 HDR 导入均覆盖。生产修复只涉及材质归属 ID 分配，保留原 HDR 处理与 shader。
+
+- [修复报告](<docs/CUSTOM-OWNER-FIX-2026-11-08.md>)；[前后实拍](<docs/evidence/custom-owner-20261108/before-after.png>)；[验收 JSON](<docs/evidence/custom-owner-20261108/acceptance.json>)。
+- [1.21.1 修复包](<build/libs/skyboxblock-1.0.7-test.2-owner.jar>)；[26.2 修复包](<mc26.2/build/libs/skyboxblock-1.0.7-test.2-owner-port.1-mc26.2.jar>)。以下 HDR 导入条目保留为 test.1 历史基础。
+
+## HDR 素材导入与指令双语（2026-11-08，test.1 历史基础）
+
+当前本地构建为 **1.0.7-test.1-hdr**（1.21.1），对应 **1.0.7-test.1-hdr-port.1-mc26.2**。自定义 `picture` 新增 Radiance RGBE `.hdr`，启动时自动曝光与色调映射为现有 sRGB 显示纹理，运行时沿用原渲染链；PNG 上限 16 MiB、HDR 40 MiB，尺寸均不超过 4096×2048。不是浮点 HDR 显示或 EXR 支持。
+
+- [交付与复现报告](<docs/HDR-IMPORT-DELIVERY-2026-11-08.md>)；[最终包验收和 SHA-256](<docs/evidence/hdr-import-20261108/acceptance.json>)；[四环境实拍](<docs/evidence/hdr-import-20261108/overview.png>)。
+- [1.21.1 JAR](<build/libs/skyboxblock-1.0.7-test.1-hdr.jar>)；[26.2 JAR](<mc26.2/build/libs/skyboxblock-1.0.7-test.1-hdr-port.1-mc26.2.jar>)。没有替换用户实例或发布新 Release。
+- `/skyboxcustom` 与服务端 `/skyboxblock` 帮助/直接反馈增加英文本地化；两版已真实验证客户端指令打开正确目录，后台实机没有抓取鼠标。以下 R38 / port.2 内容保留为历史基线。
+
 ## Minecraft 26.2 移植版（Fabric，1.0.6-test.1-port.2）
 
 同一仓库的 [`mc26.2/`](<mc26.2/README.md>) 是 1.21.1 主线的 **26.2 移植**：重做了首版移植的天空渲染路径、修正物品名称的描述键来源，并按 26.2 的 API 重新接通 Iris/ITRP 的 HDR 折射、逐玩家环境属性与私有天空时钟。

@@ -1,0 +1,37 @@
+{
+  "project": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod",
+  "tests": [
+    {
+      "name": "RadianceHdrRegression",
+      "seconds": 0.438,
+      "result": "PASS"
+    },
+    {
+      "name": "SkyConfigRegression",
+      "seconds": 0.266,
+      "result": "PASS"
+    },
+    {
+      "name": "HdrRegistryRegression",
+      "seconds": 3.484,
+      "result": "PASS"
+    }
+  ],
+  "textures": [
+    {
+      "case": "png",
+      "path": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\hdr-integration\\HdrRegistryRegression\\png\\config\\skyboxblock\\generated\\assets\\skyboxblock\\textures\\sky\\hdr_test.png",
+      "sha256": "b062bb60dac34cd7f1020b333a7f80ac90e5b686d78280a19edfb936eeaab586"
+    },
+    {
+      "case": "real4k",
+      "path": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\hdr-integration\\HdrRegistryRegression\\real4k\\config\\skyboxblock\\generated\\assets\\skyboxblock\\textures\\sky\\hdr_test.png",
+      "sha256": "0ab80b67e26e32ef1354ef0419ac1e8141bf3b2f9a6ab4db0dc02ad3caa4cf4f"
+    },
+    {
+      "case": "valid",
+      "path": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\hdr-integration\\HdrRegistryRegression\\valid\\config\\skyboxblock\\generated\\assets\\skyboxblock\\textures\\sky\\hdr_test.png",
+      "sha256": "b062bb60dac34cd7f1020b333a7f80ac90e5b686d78280a19edfb936eeaab586"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "label": "r38/c2_png16",
+  "modJar": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod\\build\\libs\\skyboxblock-1.0.5-test.1-r38.jar",
+  "javaVersion": "25.0.4.1",
+  "imageReaders": "wbmp|png|tif/tiff|gif|jpg/jpeg|bmp",
+  "skyboxesDir": "E:\\DSHworkspace\\DSHminecraft\\tmp-hdr-support-probe\\runs\\c2_png16\\config\\skyboxblock\\skyboxes",
+  "loadMs": 669,
+  "loadThrew": "",
+  "manifestHash": "ab1a84d20bf5f869c91141c65bbd773d209c4ad8097b5b13ad9e18144d57b699",
+  "styles": [
+    {"id": "skyboxblock:hdr_c2_png16", "picture": "02_png16.png", "panorama": "skyboxblock:textures/sky/hdr_c2_png16.png", "displayName": "HDR probe c2_png16"}
+  ],
+  "warnings": [
+  ],
+  "generatedTextures": [
+    {"file": "hdr_c2_png16.png", "bytes": 351504, "width": 2048, "height": 1024, "ihdrBitDepth": 8, "ihdrColorType": 6, "decodedImageType": 6, "maxChannelAfterDecode": [255, 255, 255]}
+  ],
+  "generatedBlockIcons": [
+    {"file": "hdr_c2_png16.png", "bytes": 2028, "width": 32, "height": 32, "ihdrBitDepth": 8, "ihdrColorType": 6, "decodedImageType": 6, "maxChannelAfterDecode": [255, 255, 255]}
+  ]
+}

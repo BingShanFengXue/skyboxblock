@@ -11,5 +11,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(GameRenderer.class)
 public abstract class R30GameRendererMixin {
     @Inject(method="render", at=@At("TAIL"))
-    private void skyboxprobe$r30Frame(CallbackInfo ci) { R30Probe.afterFrame(); }
+    private void skyboxprobe$r30Frame(CallbackInfo ci) {
+        if (Boolean.getBoolean("skyboxblock.r30.enabled"))
+            org.lwjgl.glfw.GLFW.glfwHideWindow(net.minecraft.client.Minecraft.getInstance().getWindow().getWindow());
+        R30Probe.afterFrame();
+    }
 }

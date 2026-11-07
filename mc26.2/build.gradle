@@ -167,6 +167,28 @@ tasks.register('regAll') {
             tasks.named('regSkySceneSemanticsRegression'), tasks.named('regSkyClockSourceRegression')
 }
 
+// Same HDR import checks as the 1.21.1 mainline.
+['hdrDecoderTest': 'RadianceHdrRegression', 'customSkyConfigTest': 'SkyConfigRegression',
+ 'hdrRegistryTest': 'HdrRegistryRegression'].each { taskName, entryPoint ->
+    tasks.register(taskName, JavaExec) {
+        group = 'verification'
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = 'dev.yg.skyboxblock.custom.' + entryPoint
+        systemProperty 'java.awt.headless', 'true'
+        args layout.buildDirectory.file(taskName == 'hdrRegistryTest'
+                ? 'hdr-registry-gradle' : 'reports/' + taskName + '.txt').get().asFile.absolutePath
+    }
+}
+tasks.register('materialIdentityTest', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.SkyMaterialIdentityRegression'
+    args layout.buildDirectory.file('reports/material-identity.txt').get().asFile.absolutePath
+}
+tasks.named('check') { dependsOn 'hdrDecoderTest', 'customSkyConfigTest', 'hdrRegistryTest', 'materialIdentityTest' }
+
 // 把编译 classpath 导出成文件：用于 javap / jar tf 直接审计 26.2 的真实 API 面。
 tasks.register('dumpCp') {
     group = 'verification'

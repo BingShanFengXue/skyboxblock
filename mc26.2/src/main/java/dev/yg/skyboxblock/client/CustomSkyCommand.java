@@ -38,40 +38,50 @@ public final class CustomSkyCommand {
     private static int open(FabricClientCommandSource source) {
         Path dir = CustomSkyRegistry.baseDir();
         if (dir == null) {
-            source.sendError(Component.literal("尚未初始化自定义天空盒目录"));
+            source.sendError(Component.translatable("command.skyboxblock.custom.not_ready"));
             return 0;
         }
-        // 26.3 移除了 Util.getPlatform().openFile(...)；用 AWT Desktop 打开，失败也不影响命令本身。
-        try {
-            java.awt.Desktop.getDesktop().open(dir.resolve(".").toFile());
-        } catch (Exception error) {
-            source.sendFeedback(Component.literal("无法自动打开文件夹，请手动前往上方的路径")
-                    .withStyle(ChatFormatting.GRAY));
-        }
-        source.sendFeedback(Component.literal("已打开：").append(Component.literal(dir.toString())
+        Path folder = dir.toAbsolutePath().normalize();
+        Component path = Component.literal(folder.toString())
                 .withStyle(Style.EMPTY.withColor(ChatFormatting.AQUA)
-                        // 26.2：ClickEvent/HoverEvent 变成 record 子类，构造器不再接受 Action 常量。
-                        .withClickEvent(new ClickEvent.OpenFile(dir.toString()))
-                        .withHoverEvent(new HoverEvent.ShowText(Component.literal("点击打开文件夹"))))));
-        source.sendFeedback(Component.literal("修改配置后需要重启游戏才会生效").withStyle(ChatFormatting.GRAY));
+                        .withClickEvent(new ClickEvent.OpenFile(folder.toString()))
+                        .withHoverEvent(new HoverEvent.ShowText(
+                                Component.translatable("command.skyboxblock.custom.open_folder"))));
+        if (!java.nio.file.Files.isDirectory(folder)) {
+            source.sendError(Component.translatable("command.skyboxblock.custom.not_ready"));
+            return 0;
+        }
+        try {
+            Util.getPlatform().openFile(folder.toFile());
+        } catch (RuntimeException error) {
+            source.sendError(Component.translatable("command.skyboxblock.custom.open_failed", path));
+            return 0;
+        }
+        source.sendFeedback(Component.translatable("command.skyboxblock.custom.opened", path));
+        source.sendFeedback(Component.translatable("command.skyboxblock.custom.restart_required")
+                .withStyle(ChatFormatting.GRAY));
         return 1;
     }
 
     private static int list(FabricClientCommandSource source) {
         List<CustomSkyRegistry.Style> styles = CustomSkyRegistry.styles();
         if (styles.isEmpty()) {
-            source.sendFeedback(Component.literal("当前没有启用的自定义天空盒").withStyle(ChatFormatting.GRAY));
+            source.sendFeedback(Component.translatable("command.skyboxblock.custom.list_empty")
+                    .withStyle(ChatFormatting.GRAY));
         } else {
-            source.sendFeedback(Component.literal("已启用 " + styles.size() + " 种自定义天空盒："));
+            source.sendFeedback(Component.translatable("command.skyboxblock.custom.list_count", styles.size()));
             for (CustomSkyRegistry.Style style : styles)
-                source.sendFeedback(Component.literal("  " + style.id() + " → " + style.picture())
+                source.sendFeedback(Component.translatable("command.skyboxblock.custom.list_entry",
+                                style.id(), style.picture())
                         .withStyle(ChatFormatting.AQUA));
         }
         List<String> warnings = CustomSkyRegistry.warnings();
         if (!warnings.isEmpty()) {
-            source.sendFeedback(Component.literal("被跳过/警告 " + warnings.size() + " 条：").withStyle(ChatFormatting.YELLOW));
+            source.sendFeedback(Component.translatable("command.skyboxblock.custom.warning_count", warnings.size())
+                    .withStyle(ChatFormatting.YELLOW));
             for (String warning : warnings.stream().limit(10).toList())
-                source.sendFeedback(Component.literal("  " + warning).withStyle(ChatFormatting.GRAY));
+                source.sendFeedback(Component.translatable("command.skyboxblock.custom.warning_entry", warning)
+                        .withStyle(ChatFormatting.GRAY));
         }
         return styles.size();
     }

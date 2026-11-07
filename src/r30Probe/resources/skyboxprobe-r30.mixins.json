@@ -3,6 +3,6 @@
   "package": "dev.yg.skyboxprobe.mixin",
   "compatibilityLevel": "JAVA_21",
   "refmap": "skyboxprobe-r30-refmap.json",
-  "client": ["R30GameRendererMixin", "R30SkyTransactionsMixin", "R30LodIsolationMixin", "R30OwnedGlAllocationsMixin", "R30OwnedCanvasesMixin"],
+  "client": ["R30GameRendererMixin", "R30SkyTransactionsMixin", "R30LodIsolationMixin", "R30OwnedGlAllocationsMixin", "R30OwnedCanvasesMixin", "R30WindowMixin", "R30MouseMixin"],
   "injectors": {"defaultRequire": 1}
 }

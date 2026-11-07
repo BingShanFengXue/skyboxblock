@@ -1,0 +1,19 @@
+{
+  "label": "port2/c8_oversize",
+  "modJar": "E:\\DSHworkspace\\DSHminecraft\\skybox-mod-26.2\\output\\skyboxblock-1.0.6-test.1-port.2-mc26.2.jar",
+  "javaVersion": "25.0.4.1",
+  "imageReaders": "gif|png|bmp|tif/tiff|jpg/jpeg|wbmp",
+  "skyboxesDir": "E:\\DSHworkspace\\DSHminecraft\\tmp-hdr-support-probe\\runs\\c8_oversize\\config\\skyboxblock\\skyboxes",
+  "loadMs": 245,
+  "loadThrew": "",
+  "manifestHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "styles": [
+  ],
+  "warnings": [
+    "图片超过 4096x2048：08_oversize_4098.png"
+  ],
+  "generatedTextures": [
+  ],
+  "generatedBlockIcons": [
+  ]
+}

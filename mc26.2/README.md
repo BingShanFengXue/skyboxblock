@@ -1,4 +1,20 @@
-# skyboxblock — Minecraft 26.2 / port.2
+# skyboxblock — Minecraft 26.2
+
+## 自定义材质归属修复（1.0.7-test.2-owner-port.1）
+
+修复 HDR 与 PNG 自定义天空在 ITRP 下的后排互相透视，给每个 custom ID 分配独立的有效 coverage owner，生产 shader 和深度容差保持原样。
+
+- [修复包](<build/libs/skyboxblock-1.0.7-test.2-owner-port.1-mc26.2.jar>)；[报告与复现](<../docs/CUSTOM-OWNER-FIX-2026-11-08.md>)；[修复前后实拍](<../docs/evidence/custom-owner-20261108/before-after.png>)。
+- 以下 HDR 导入与 port.2 条目保留为历史基础。
+
+## HDR 素材导入（1.0.7-test.1-hdr-port.1，2026-11-08，历史基础）
+
+1.21.1 主线的 Radiance RGBE `.hdr` 解码器与回归原样移植到本目录。HDR 在启动阶段转换为适用于现有渲染链的 sRGB 显示纹理，尺寸上限 4096×2048、文件上限 40 MiB；PNG 保留 16 MiB。客户端打开目录指令与服务端帮助/反馈均提供中英文。
+
+- [本地构建 JAR](<build/libs/skyboxblock-1.0.7-test.1-hdr-port.1-mc26.2.jar>)；[交付报告](<../docs/HDR-IMPORT-DELIVERY-2026-11-08.md>)；[最终包与四环境证据](<../docs/evidence/hdr-import-20261108/acceptance.json>)。
+- 仍以 26.2 / Java 25 / OpenGL 为目标，沿用下述 port.2 渲染基础；不是原生浮点 HDR 输出或 EXR 支持。用户实例未自动替换。
+
+## port.2 历史基线
 
 本项目是[1.21.1 主线](<../README.md>)的 **26.2 Fabric 移植**，位于同一仓库的 `mc26.2/` 目录。`port.2` 重做了首版移植的天空渲染路径，并修复物品名称的描述键来源。
 

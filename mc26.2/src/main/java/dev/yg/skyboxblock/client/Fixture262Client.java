@@ -95,6 +95,19 @@ public final class Fixture262Client implements ClientModInitializer {
             if (input.has("stop")) { finish(input, null); mc.stop(); return; }
             if (input.has("shader")) setShader(input.get("shader").getAsString());
             if (input.has("reload")) reloading = mc.reloadResourcePacks();
+            if (input.has("clientCommands")) {
+                var dispatcher = net.fabricmc.fabric.api.client.command.v2.ClientCommands.getActiveDispatcher();
+                var source = (net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource)(Object)mc.getConnection().getSuggestionsProvider();
+                JsonArray outcomes = new JsonArray();
+                for (var command : input.getAsJsonArray("clientCommands")) {
+                    String text = command.getAsString();
+                    JsonObject outcome = new JsonObject();
+                    outcome.addProperty("command", text);
+                    outcome.addProperty("result", dispatcher.execute(text.startsWith("/") ? text.substring(1) : text, source));
+                    outcomes.add(outcome);
+                }
+                input.add("_clientCommands", outcomes);
+            }
             if (input.has("hud")) hideHud = !input.get("hud").getAsBoolean();
             if (input.has("clouds")) mc.options.cloudStatus().set(input.get("clouds").getAsBoolean()
                     ? net.minecraft.client.CloudStatus.FANCY : net.minecraft.client.CloudStatus.OFF);
@@ -198,6 +211,7 @@ public final class Fixture262Client implements ClientModInitializer {
             result.addProperty("ok", error == null);
             result.addProperty("frame", frames);
             if (input.has("_commands")) result.add("commands", input.get("_commands"));
+            if (input.has("_clientCommands")) result.add("clientCommands", input.get("_clientCommands"));
             if (input.has("_gpuInputs")) result.add("gpuInputs", input.get("_gpuInputs"));
             result.addProperty("windowVisible", org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(mc.getWindow().handle(), org.lwjgl.glfw.GLFW.GLFW_VISIBLE) != 0);
             result.addProperty("windowFocused", org.lwjgl.glfw.GLFW.glfwGetWindowAttrib(mc.getWindow().handle(), org.lwjgl.glfw.GLFW.GLFW_FOCUSED) != 0);

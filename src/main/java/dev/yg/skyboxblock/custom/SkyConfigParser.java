@@ -329,8 +329,9 @@ public final class SkyConfigParser {
         if (".".equals(picture) || "..".equals(picture)) {
             return "picture 不能是 '.' 或 '..'";
         }
-        if (!picture.toLowerCase(Locale.ROOT).endsWith(".png")) {
-            return "picture 必须以 .png 结尾（大小写不敏感）";
+        String lower = picture.toLowerCase(Locale.ROOT);
+        if (!lower.endsWith(".png") && !lower.endsWith(".hdr")) {
+            return "picture 必须以 .png 或 .hdr 结尾（大小写不敏感）";
         }
         return null;
     }
