@@ -78,6 +78,26 @@ public final class HdrRegistryRegression {
         CustomSkyRegistry.load(pngGame);
         check(CustomSkyRegistry.styles().size() == 1, "existing PNG import preserved");
         check(Arrays.equals(png, Files.readAllBytes(texture(pngGame))), "constant PNG import bytes unchanged");
+
+        Path exrGame = studio(root, "exr", "scene.exr", true);
+        Files.write(file(exrGame, "scene.exr"), OpenExrRegression.sampleExr(false, false));
+        CustomSkyRegistry.load(exrGame);
+        check(CustomSkyRegistry.styles().size() == 1, "EXR registered through registry");
+        check(ImageIO.read(texture(exrGame).toFile()).getWidth() == 4, "EXR texture generated");
+        Path txGame = studio(root, "tx", "scene.tx", true);
+        Files.write(file(txGame, "scene.tx"), OpenExrRegression.sampleExr(true, false));
+        CustomSkyRegistry.load(txGame);
+        check(CustomSkyRegistry.styles().size() == 1, "TX OpenEXR registered through registry");
+        check(ImageIO.read(texture(txGame).toFile()).getHeight() == 2, "TX texture generated");
+        Path jpgGame = studio(root, "jpg", "scene.JPG", true);
+        BufferedImage jpgSource = new BufferedImage(4, 2, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < 2; y++) for (int x = 0; x < 4; x++) jpgSource.setRGB(x, y, 0xff000000 | (x * 60 << 16) | (y * 100 << 8) | 40);
+        ImageIO.write(jpgSource, "JPEG", file(jpgGame, "scene.JPG").toFile());
+        Files.write(file(jpgGame, "scene.JPG"), new byte[17 * 1024 * 1024], java.nio.file.StandardOpenOption.APPEND);
+        CustomSkyRegistry.load(jpgGame);
+        check(CustomSkyRegistry.styles().size() == 1, "JPG larger than old 16MiB cap registered");
+        check(ImageIO.read(texture(jpgGame).toFile()).getWidth() == 4, "JPG texture generated");
+
         if (args.length > 1) {
             Path real = studio(root, "real4k", "real.hdr", true);
             Files.copy(Path.of(args[1]), file(real, "real.hdr"));

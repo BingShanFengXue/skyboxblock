@@ -1,6 +1,8 @@
 package dev.yg.skyboxblock.custom;
 
 import dev.yg.skyboxblock.SkyboxBlockMod;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.resources.ResourceLocation;
 
 import javax.imageio.ImageIO;
@@ -34,8 +36,6 @@ public final class CustomSkyRegistry {
     private static final int MAX_FILES = 64;
     private static final int MAX_STYLES = 64;
     private static final long MAX_FILE_BYTES = 64 * 1024;
-    private static final long MAX_IMAGE_BYTES = 16L * 1024 * 1024;
-    private static final long MAX_HDR_BYTES = 40L * 1024 * 1024;
     private static final int MAX_IMAGE_WIDTH = 4096;
     private static final int MAX_IMAGE_HEIGHT = 2048;
 
@@ -63,6 +63,7 @@ public final class CustomSkyRegistry {
     public static void load(Path gameDir) {
         STYLES.clear();
         WARNINGS.clear();
+        HtmlPanoramaRenderer.beginLoad();
         baseDir = gameDir.resolve("config").resolve("skyboxblock").resolve(FOLDER);
         generatedDir = gameDir.resolve("config").resolve("skyboxblock").resolve("generated");
         try {
@@ -128,19 +129,9 @@ public final class CustomSkyRegistry {
             return false;
         }
         Path picture = baseDir.resolve(spec.picture());
-        if (!Files.isRegularFile(picture)) {
+        boolean htmlSource = HtmlPanoramaRenderer.isHtml(picture);
+        if (!Files.isRegularFile(picture) && !htmlSource) {
             WARNINGS.add(fileName + ": 找不到图片 " + spec.picture() + "，已跳过 " + spec.id());
-            return false;
-        }
-        try {
-            long maxBytes = isRadianceHdr(picture) ? MAX_HDR_BYTES : MAX_IMAGE_BYTES;
-            if (Files.size(picture) > maxBytes) {
-                WARNINGS.add(fileName + ": 图片 " + spec.picture() + " 超过 "
-                        + (maxBytes / (1024 * 1024)) + " MiB，已跳过 " + spec.id());
-                return false;
-            }
-        } catch (IOException error) {
-            WARNINGS.add(fileName + ": 无法读取图片 " + spec.picture() + "：" + error.getMessage());
             return false;
         }
         ResourceLocation panorama;
@@ -157,6 +148,16 @@ public final class CustomSkyRegistry {
         return true;
     }
 
+    private static boolean isDedicatedServer() {
+        String testOverride = System.getProperty("skyboxblock.test.dedicatedServer");
+        if (testOverride != null) return Boolean.parseBoolean(testOverride);
+        try {
+            return FabricLoader.getInstance().getEnvironmentType() == EnvType.SERVER;
+        } catch (NullPointerException noLauncherInRegressionProcess) {
+            return false;
+        }
+    }
+
     /**
      * Copies the panorama into the generated pack with a soft wrap seam, and writes the pack files
      * that describe the block. Returns the texture id, or {@code null} when the image is unusable.
@@ -166,21 +167,39 @@ public final class CustomSkyRegistry {
         String ns = id.getNamespace();
         String path = id.getPath();
         BufferedImage image;
-        if (isRadianceHdr(picture)) {
-            RadianceHdr.Decoded decoded = RadianceHdr.decode(Files.readAllBytes(picture),
+        if (HtmlPanoramaRenderer.isHtml(picture)) {
+            if (isDedicatedServer()) {
+                image = HtmlPanoramaRenderer.placeholderImage();
+                WARNINGS.add("HTML sky " + picture.getFileName()
+                        + ": dedicated server registers the same style with a placeholder; no browser is launched");
+            } else if (!HtmlPanoramaRenderer.enabled()) {
+                image = HtmlPanoramaRenderer.placeholderImage();
+                WARNINGS.add("HTML sky " + picture.getFileName()
+                        + ": import is disabled; set -D" + HtmlPanoramaRenderer.ENABLE_PROPERTY + "=true on the client");
+            } else {
+                long started = System.nanoTime();
+                try {
+                    HtmlPanoramaRenderer.Rendered rendered = HtmlPanoramaRenderer.render(picture,
+                            generatedDir.resolve("html-cache"), MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT);
+                    image = rendered.image();
+                    SkyboxBlockMod.LOGGER.info("[skyboxblock] HTML panorama {}: {}x{}, cacheHit={}, renderMs={}",
+                            picture.getFileName(), image.getWidth(), image.getHeight(), rendered.cacheHit(),
+                            (System.nanoTime() - started) / 1_000_000);
+                } catch (IOException | RuntimeException error) {
+                    image = HtmlPanoramaRenderer.placeholderImage();
+                    WARNINGS.add("HTML sky " + picture.getFileName() + ": rendering failed; placeholder used: "
+                            + error.getClass().getSimpleName() + ": " + error.getMessage());
+                }
+            }
+        } else {
+            PanoramaImageDecoder.Decoded decoded = PanoramaImageDecoder.decode(picture,
                     MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT);
             image = decoded.image();
-            SkyboxBlockMod.LOGGER.info("[skyboxblock] HDR {}: {}x{}, exposure={}, medianLuminance={}",
-                    picture.getFileName(), image.getWidth(), image.getHeight(),
-                    decoded.exposure(), decoded.medianLuminance());
-        } else {
-            try (InputStream input = Files.newInputStream(picture)) {
-                image = ImageIO.read(input);
+            if (decoded.exposure() != 1.0 || Double.isFinite(decoded.medianLuminance())) {
+                SkyboxBlockMod.LOGGER.info("[skyboxblock] {} {}: {}x{}, exposure={}, medianLuminance={}",
+                        decoded.format(), picture.getFileName(), image.getWidth(), image.getHeight(),
+                        decoded.exposure(), decoded.medianLuminance());
             }
-        }
-        if (image == null) {
-            WARNINGS.add("图片无法解析（需要 PNG）：" + picture.getFileName());
-            return null;
         }
         if (image.getWidth() > MAX_IMAGE_WIDTH || image.getHeight() > MAX_IMAGE_HEIGHT) {
             WARNINGS.add("图片超过 4096x2048：" + picture.getFileName());
@@ -275,10 +294,6 @@ public final class CustomSkyRegistry {
         } catch (RuntimeException | java.security.NoSuchAlgorithmException error) {
             return "unavailable";
         }
-    }
-
-    private static boolean isRadianceHdr(Path picture) {
-        return picture.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".hdr");
     }
 
     /** Two deterministic panorama examples plus the documented example config; never overwritten. */

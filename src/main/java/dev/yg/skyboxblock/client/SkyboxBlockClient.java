@@ -13,6 +13,7 @@ public final class SkyboxBlockClient implements ClientModInitializer {
         SkyboxServerState.register();
         CustomSkyCommand.register();
         registerCustomStylePack();
+        HtmlDynamicSkyManager.register();
         if(ModCompat.DISTANT_HORIZONS) {
             try { DistantSkyDepth.register(); }
             catch(RuntimeException | LinkageError error) { SkyboxBlockMod.LOGGER.warn("[skyboxblock] optional DH render event adapter unavailable",error); }

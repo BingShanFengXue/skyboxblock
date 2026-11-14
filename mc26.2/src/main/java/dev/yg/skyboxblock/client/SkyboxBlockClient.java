@@ -20,6 +20,7 @@ public final class SkyboxBlockClient implements ClientModInitializer {
         BlockEntityRenderers.register(SkyboxBlockMod.SKY_BLOCK_ENTITY, context -> new SkyBlockEntityRenderer());
         SkyboxServerState.register();
         CustomSkyCommand.register();
+        HtmlDynamicSkyManager.register();
         CustomSkyPacks.install();
         // The native opaque/final view mixins own rendering. Never draw a second SkyRenderer here:
         // Iris hooks change global pipeline phases even when the destination is a private target.

@@ -330,8 +330,10 @@ public final class SkyConfigParser {
             return "picture 不能是 '.' 或 '..'";
         }
         String lower = picture.toLowerCase(Locale.ROOT);
-        if (!lower.endsWith(".png") && !lower.endsWith(".hdr")) {
-            return "picture 必须以 .png 或 .hdr 结尾（大小写不敏感）";
+        if (!(lower.endsWith(".png") || lower.endsWith(".hdr") || lower.endsWith(".exr")
+                || lower.endsWith(".tx") || lower.endsWith(".jpg") || lower.endsWith(".jpeg")
+                || lower.endsWith(".html") || lower.endsWith(".htm"))) {
+            return "picture 必须以 .png、.jpg、.hdr、.exr、.tx、.html 或 .htm 结尾（大小写不敏感）";
         }
         return null;
     }

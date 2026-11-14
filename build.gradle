@@ -194,7 +194,40 @@ tasks.register('materialIdentityTest', JavaExec) {
     mainClass = 'dev.yg.skyboxblock.SkyMaterialIdentityRegression'
     args layout.buildDirectory.file('reports/material-identity.txt').get().asFile.absolutePath
 }
-tasks.named('check') { dependsOn 'hdrDecoderTest', 'customSkyConfigTest', 'hdrRegistryTest', 'materialIdentityTest' }
+tasks.register('openExrTest', JavaExec) {
+    group = 'verification'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.custom.OpenExrRegression'
+    systemProperty 'java.awt.headless', 'true'
+    args layout.buildDirectory.dir('exr-regression').get().asFile.absolutePath
+}
+tasks.named('check') { dependsOn 'hdrDecoderTest', 'customSkyConfigTest', 'hdrRegistryTest', 'materialIdentityTest', 'openExrTest' }
+tasks.register('htmlPanoramaTest', JavaExec) {
+    group = 'verification'
+    description = 'Validate HTML panorama opt-in, registry fallback and optional Chromium capture'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.custom.HtmlPanoramaRegression'
+    systemProperty 'java.awt.headless', 'true'
+    if (project.findProperty('htmlBrowser') != null) {
+        systemProperty 'skyboxblock.html.browser', project.findProperty('htmlBrowser').toString()
+    }
+    if (project.findProperty('htmlBrowserTest')?.toString() == 'true') args '--browser'
+}
+tasks.named('check') { dependsOn 'htmlPanoramaTest' }
+tasks.register('htmlDynamicPanoramaTest', JavaExec) {
+    group = 'verification'
+    description = 'Stream animated HTML frames from a local Chromium browser'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.custom.HtmlDynamicCaptureRegression'
+    systemProperty 'java.awt.headless', 'true'
+    if (project.findProperty('htmlBrowser') != null) {
+        systemProperty 'skyboxblock.html.browser', project.findProperty('htmlBrowser').toString()
+    }
+    args layout.buildDirectory.dir('html-dynamic-regression').get().asFile.absolutePath
+}
 
 // Separate, opt-in test mod: true no-skybox portal baselines must not load main output.
 sourceSets {

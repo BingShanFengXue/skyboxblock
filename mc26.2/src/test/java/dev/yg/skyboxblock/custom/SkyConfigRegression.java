@@ -181,9 +181,13 @@ public final class SkyConfigRegression {
         eq("C", SkyConfigParser.displayName(multi.styles().get(2), "en_us"), "同行语言块生效");
         check(multi.styles().get(2).creativeInventory() == false, "creative_inventory 缺省 false");
 
-        SkyConfigParser.Result hdr = parse("sky = { id = \"skyboxblock:hdr\" picture = \"radiance.HDR\" }");
-        check(hdr.usable(), "Radiance HDR 扩展名大小写不敏感且可用");
-        eq("radiance.HDR", one(hdr, "HDR 图片块").picture(), "HDR 文件名大小写保留");
+        SkyConfigParser.Result exr = parse("sky = { id = \"skyboxblock:exr\" picture = \"scene.EXR\" }");
+        check(exr.usable(), "OpenEXR 扩展名大小写不敏感且可用");
+        eq("scene.EXR", one(exr, "EXR 图片块").picture(), "EXR 文件名大小写保留");
+        for (String extension : new String[]{".tx", ".jpg", ".jpeg", ".html", ".htm"}) {
+            SkyConfigParser.Result accepted = parse("sky = { id = \"skyboxblock:format\" picture = \"scene" + extension + "\" }");
+            check(accepted.usable(), extension + " 图片扩展名可用");
+        }
     }
 
     /** enable 的各种写法。 */
@@ -322,7 +326,7 @@ public final class SkyConfigRegression {
         badBlock("缺 picture", "    id = \"skyboxblock:x\"", "缺少 picture");
         badBlock("picture 带斜杠", "    id = \"skyboxblock:x\"\n    picture = \"a/b.png\"", "不能包含");
         badBlock("picture 带反斜杠", "    id = \"skyboxblock:x\"\n    picture = a\\b.png", "不能包含");
-        badBlock("picture 非 png/hdr", "    id = \"skyboxblock:x\"\n    picture = \"a.exr\"", "必须以 .png 或 .hdr 结尾");
+        badBlock("picture 非支持格式", "    id = \"skyboxblock:x\"\n    picture = \"a.gif\"", "必须以 .png、.jpg、.hdr、.exr、.tx、.html 或 .htm 结尾");
         badBlock("picture 空串", "    id = \"skyboxblock:x\"\n    picture = \"\"", "不能是空串");
         badBlock("picture 是单点", "    id = \"skyboxblock:x\"\n    picture = \".\"", "不能是 '.' 或 '..'");
         badBlock("picture 是双点", "    id = \"skyboxblock:x\"\n    picture = \"..\"", "不能是 '.' 或 '..'");
@@ -338,7 +342,7 @@ public final class SkyConfigRegression {
     /** 单块错误只跳过自己。 */
     private static void mixedBlocks() {
         SkyConfigParser.Result result = parse(lines(
-                "bad = { id = \"skyboxblock:bad\" picture = \"bad.jpg\" }",
+                "bad = { id = \"skyboxblock:bad\" picture = \"bad.gif\" }",
                 "good = { id = \"skyboxblock:good\" picture = \"good.png\" }"));
         eq(1, result.styles().size(), "坏块只跳过自己");
         eq("skyboxblock:good", result.styles().get(0).id(), "好块照常返回");

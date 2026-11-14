@@ -1,6 +1,16 @@
 # skyboxblock — Minecraft 26.2
 
-## 自定义材质归属修复（1.0.7-test.2-owner-port.1）
+## HTML 网页全景实验（2026-11-14）
+
+26.2 同步支持 `.html` / `.htm` 静态全景快照，客户端默认关闭；服务端不启动浏览器并保留同一方块注册 ID。参数、性能额度、4K 截图回归与回退步骤见 [HTML-PANORAMA-EXPERIMENT-2026-11-14.md](<../docs/HTML-PANORAMA-EXPERIMENT-2026-11-14.md>)。
+
+- 动态实验构建：[skyboxblock-1.0.8-test.2-html-dynamic-mc26.2.jar](<build/libs/skyboxblock-1.0.8-test.2-html-dynamic-mc26.2.jar>)；SHA-256 `566D4ABFE7222FE45E620C2C5D7A3BBE588B6F4FC73F15CB7DBA47171F88A84D`。默认动态开关关闭；详见实验说明。
+
+## 多格式图片导入（2026-11-13）
+
+1.21.1 主线的 EXR/TX/JPG/JPEG 图片导入、无图片字节限制与 ImageIO 临时缓存修正已同步到本目录；像素尺寸仍为 4096×2048，配置文件限制保持不变。当前最终包已用 Java25 构建并通过 `build regAll`。
+
+- [最终多格式 JAR](<build/libs/skyboxblock-1.0.7-test.3-formats-port.1-mc26.2.jar>)；[多格式交付报告](<../docs/FORMATS-IMPORT-DELIVERY-2026-11-13.md>)；[上一轮 owner 修复报告](<../docs/CUSTOM-OWNER-FIX-2026-11-08.md>)。## 自定义材质归属修复（1.0.7-test.2-owner-port.1）
 
 修复 HDR 与 PNG 自定义天空在 ITRP 下的后排互相透视，给每个 custom ID 分配独立的有效 coverage owner，生产 shader 和深度容差保持原样。
 

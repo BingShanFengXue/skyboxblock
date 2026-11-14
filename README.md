@@ -1,6 +1,18 @@
 # Sky Box Block（天空盒方块）
 
-## 自定义天空材质前后遮挡修复（2026-11-08）
+## HTML 网页全景实验（2026-11-14）
+
+自定义天空可用 `.html` / `.htm` 作静态全景源；客户端显式启用后由本机 Chromium 截取 2:1 页面快照，资源仍走现有纹理渲染路径。默认关闭，服务器只注册相同样式 ID 并使用占位纹理。配置、浏览器参数、性能额度、实机回归及回退方法见 [HTML-PANORAMA-EXPERIMENT-2026-11-14.md](<docs/HTML-PANORAMA-EXPERIMENT-2026-11-14.md>)。
+
+- 1.21.1 动态实验构建：[skyboxblock-1.0.8-test.2-html-1.21.1.jar](<build/libs/skyboxblock-1.0.8-test.2-html-1.21.1.jar>)；SHA-256 `D51559F6A2B5557D2FC188FE8394F91AF4E559651B4E7FB0ACECFBDB6278A6C1`。
+- 26.2 动态实验构建：[skyboxblock-1.0.8-test.2-html-dynamic-mc26.2.jar](<mc26.2/build/libs/skyboxblock-1.0.8-test.2-html-dynamic-mc26.2.jar>)；SHA-256 `566D4ABFE7222FE45E620C2C5D7A3BBE588B6F4FC73F15CB7DBA47171F88A84D`。两版动态模式默认关闭；动态实测使用 Java 25 + Edge。
+
+## 多格式图片导入（2026-11-13）
+
+在上一轮 owner 修复基础上，自定义天空 `picture` 新增 `.exr`、`.tx`、`.jpg` / `.jpeg`，并移除图片文件字节数限制；像素尺寸仍为 4096×2048，配置文件限制保持不变。EXR/TX 走纯 Java OpenEXR，JPG 走 ImageIO，HDR/PNG 保留原路径。先完成 1.21.1，再同步到 26.2。
+
+- [1.21.1 最终多格式 JAR](<build/libs/skyboxblock-1.0.7-test.3-formats.jar>)；[26.2 最终多格式 JAR](<mc26.2/build/libs/skyboxblock-1.0.7-test.3-formats-port.1-mc26.2.jar>)；[交付报告](<docs/FORMATS-IMPORT-DELIVERY-2026-11-13.md>)。
+- 上一轮 owner 修复包和证据见 [CUSTOM-OWNER-FIX-2026-11-08.md](<docs/CUSTOM-OWNER-FIX-2026-11-08.md>)。## 自定义天空材质前后遮挡修复（2026-11-08）
 
 当前修复构建为 **1.0.7-test.2-owner**（1.21.1）与 **1.0.7-test.2-owner-port.1-mc26.2**。修复 ITRP 特定视角下前排自定义天空出现后排浅灰轮廓；普通 PNG 和 HDR 导入均覆盖。生产修复只涉及材质归属 ID 分配，保留原 HDR 处理与 shader。
 
