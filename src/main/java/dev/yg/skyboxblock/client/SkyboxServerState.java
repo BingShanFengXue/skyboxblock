@@ -21,6 +21,11 @@ public final class SkyboxServerState {
     public static boolean enforced() { return enforced; }
     public static SkyboxSettings get() { return snapshot; }
 
+    /** True after the current connection has delivered at least one authoritative snapshot. */
+    public static synchronized boolean ready() { return enforced && lastRevision >= 0L; }
+    /** Revision of the snapshot used by the client-side toggle debounce. */
+    public static synchronized long revision() { return lastRevision; }
+
     /** Invoked on the client thread; stale snapshots never roll back a live connection. */
     public static synchronized void accept(SkyboxSettings settings) {
         Objects.requireNonNull(settings, "server settings");

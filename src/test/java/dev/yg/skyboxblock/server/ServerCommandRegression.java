@@ -3,6 +3,7 @@ package dev.yg.skyboxblock.server;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.ParseResults;
 import com.mojang.brigadier.arguments.ArgumentType;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -162,6 +163,28 @@ public final class ServerCommandRegression {
                 "no nested skyboxblock root");
         // The tree is serialisable to clients: only built-in argument types, one attribute node.
         serialisationRegression(dispatcher);
+        visibilitySyntax(dispatcher, source);
+    }
+
+    private static void visibilitySyntax(CommandDispatcher<CommandSourceStack> dispatcher, CommandSourceStack source) {
+        for (String prefix : List.of("skyboxblock env render_skybox ", "skyboxblock environment set visual/render_skybox ",
+                "skyboxblock player @a render_skybox ", "skyboxblock player @a set minecraft:visual/render_skybox ")) {
+            for (String value : List.of("true", "false")) {
+                var parsed = dispatcher.parse(prefix + value, source);
+                require(parsed.getExceptions().isEmpty() && !parsed.getReader().canRead(), "parse native bool: " + prefix + value);
+                equal(Boolean.valueOf(value), BoolArgumentType.getBool(parsed.getContext().build(prefix + value),
+                        SkyboxServerCommands.VALUE), "parsed value is boolean");
+            }
+            for (String value : List.of("t", "f", "auto", "0", "1", "TRUE", "false extra")) {
+                var parsed = dispatcher.parse(prefix + value, source);
+                require(!parsed.getExceptions().isEmpty() || parsed.getReader().canRead(), "invalid native bool: " + prefix + value);
+            }
+            equal(List.of("false"), suggestions(dispatcher, source, prefix + "f"), "native false TAB");
+            equal(List.of("true"), suggestions(dispatcher, source, prefix + "t"), "native true TAB");
+        }
+        var sourceWithoutPermission = player(new Capture());
+        require(dispatcher.parse("skyboxblock env render_skybox false", sourceWithoutPermission).getReader().canRead(),
+                "write visibility requires operator permissions");
     }
 
     /** The three id forms of one attribute, as the player may type them. */
@@ -184,9 +207,8 @@ public final class ServerCommandRegression {
     }
 
     /**
-     * The command tree must survive {@code ClientboundCommandsPacket}: no custom argument types and
-     * no custom literal nodes, only the vanilla resource-location id and greedy strings, so a real
-     * client receives the same single-form TAB instead of 45 duplicate literals.
+     * The command tree must survive {@code ClientboundCommandsPacket}. In particular the
+     * render switch must be advertised as the vanilla {@code brigadier:bool} argument.
      */
     private static void serialisationRegression(CommandDispatcher<CommandSourceStack> dispatcher) {
         CommandNode<CommandSourceStack> root = dispatcher.getRoot();
@@ -199,14 +221,25 @@ public final class ServerCommandRegression {
         require(attribute instanceof ArgumentCommandNode<CommandSourceStack, ?>, "attribute node is an argument");
         ArgumentType<?> type = ((ArgumentCommandNode<CommandSourceStack, ?>) attribute).getType();
         require(type instanceof ResourceLocationArgument, "attribute uses ResourceLocationArgument: " + type);
-        // Every id form stays a plain value of that one argument, never a literal alias.
-        List<String> aliasForms = new ArrayList<>();
-        for (SkyEnvironment.Attribute candidate : SkyEnvironment.attributes()) aliasForms.addAll(forms(candidate));
-        for (CommandNode<CommandSourceStack> child : attribute.getChildren())
-            require(!aliasForms.contains(child.getName()), "no per-attribute literal alias: " + child.getName());
-        require(attribute.getChildren().stream().noneMatch(node -> node instanceof LiteralCommandNode
-                        && aliasForms.contains(node.getName())),
-                "no per-attribute literal aliases remain");
+        var skybox = root.getChild("skyboxblock");
+        var env = skybox.getChild("env");
+        var targets = skybox.getChild("player").getChild("targets");
+        for (var parent : List.of(environment, environment.getChild("set"), env, env.getChild("set"),
+                targets, targets.getChild("set"))) {
+            for (String id : List.of("render_skybox", "visual/render_skybox", "minecraft:visual/render_skybox",
+                    "minecraft:render_skybox")) {
+                var literal = parent.getChild(id);
+                require(literal instanceof LiteralCommandNode, "native render ID route: " + id);
+                var value = literal.getChild(SkyboxServerCommands.VALUE);
+                require(value instanceof ArgumentCommandNode<?, ?> argument && argument.getType() instanceof BoolArgumentType,
+                        "render value uses the original boolean argument: " + id);
+                var argument = (ArgumentCommandNode<?, ?>) value;
+                equal(null, argument.getCustomSuggestions(), "boolean suggestions are native");
+                var serializer = net.minecraft.commands.synchronization.ArgumentTypeInfos.byClass(argument.getType());
+                equal("brigadier:bool", net.minecraft.core.registries.BuiltInRegistries.COMMAND_ARGUMENT_TYPE
+                        .getKey(serializer).toString(), "native argument ID on the command tree wire");
+            }
+        }
         require(environment.getChild("get").getChild(SkyboxServerCommands.ATTRIBUTE) != null,
                 "get uses the shared attribute node");
         require(environment.getChild("reset").getChild(SkyboxServerCommands.ATTRIBUTE) != null,
@@ -220,7 +253,7 @@ public final class ServerCommandRegression {
             // EntityArgument is vanilla and serialisable (minecraft:entity), so the per-player
             // subtree survives ClientboundCommandsPacket exactly like the attribute node does.
             boolean builtIn = type instanceof ResourceLocationArgument || type instanceof StringArgumentType
-                    || type instanceof net.minecraft.commands.arguments.EntityArgument;
+                    || type instanceof BoolArgumentType || type instanceof net.minecraft.commands.arguments.EntityArgument;
             if (!builtIn) problems.add(path + " -> " + type.getClass().getName());
         } else if (!(node instanceof RootCommandNode || node instanceof LiteralCommandNode)) {
             problems.add(path + " -> " + node.getClass().getName());
@@ -270,6 +303,9 @@ public final class ServerCommandRegression {
         set(dispatcher, "skyboxblock env fog_start_distance 100", "visual/fog_start_distance = 100");
         set(dispatcher, "skyboxblock env moon_phase 7", "visual/moon_phase = waxing_gibbous");
         set(dispatcher, "skyboxblock env has_sky_occluder true", "visual/has_sky_occluder = true");
+        set(dispatcher, "skyboxblock env render_skybox false", "visual/render_skybox = false");
+        set(dispatcher, "skyboxblock environment set visual/render_skybox true", "visual/render_skybox = true");
+        set(dispatcher, "skyboxblock env render_skybox reset", "visual/render_skybox = auto");
         // reset one attribute, then `set <id> auto` as an explicit reset.
         Capture resetActor = operator();
         require(succeeds(dispatcher, "skyboxblock env reset sky_color", operator(resetActor)), "reset one");
@@ -467,8 +503,8 @@ public final class ServerCommandRegression {
     // ── suggestions ──────────────────────────────────────────────────────────────────────
 
     /**
-     * TAB comes from one suggestion provider on the shared attribute node, so each attribute is
-     * offered in exactly the form matching the typed prefix — no 45 duplicate alias literals.
+     * Generic attribute TAB is filtered by ID form. The boolean setter also advertises its
+     * literal aliases, and its value completion is provided by Brigadier itself.
      */
     private static void suggestionRegression() {
         CommandDispatcher<CommandSourceStack> dispatcher = tree();
@@ -478,18 +514,25 @@ public final class ServerCommandRegression {
                     "skyboxblock env set "}) {
                 List<String> list = suggestions(dispatcher, source, head + prefix);
                 equal(new LinkedHashSet<>(list).size(), list.size(), "no duplicate suggestion: " + head + prefix);
+                boolean setter = head.endsWith(" set ");
                 for (SkyEnvironment.Attribute attribute : SkyEnvironment.attributes()) {
                     String expected = prefix + attribute.shortId();
-                    require(list.contains(expected), "one form " + expected + " under " + prefix + ": " + list);
-                    for (String other : new String[]{attribute.shortId(), attribute.id(),
-                            "minecraft:" + attribute.id()})
+                    require(list.contains(expected), "matching ID " + expected + " under " + prefix + ": " + list);
+                    if (setter && prefix.isEmpty() && attribute == SkyEnvironment.RENDER_SKYBOX) continue;
+                    for (String other : forms(attribute))
                         if (!other.equals(expected))
                             require(!list.contains(other), "duplicate form " + other + " hidden under " + prefix);
                 }
-                int extras=head.endsWith(" reset ") && prefix.isEmpty() ? 1 : 0;
-                if(extras==1) require(list.contains("all"),"reset all suggestion exists");
-                equal(SkyEnvironment.attributes().size()+extras, list.size(),
-                        "exactly one suggestion per attribute plus reset all under " + head + prefix);
+                int extras = 0;
+                if (prefix.isEmpty() && head.endsWith(" reset ")) {
+                    require(list.contains("all"), "reset all suggestion exists");
+                    extras = 1;
+                } else if (prefix.isEmpty() && setter) {
+                    require(list.containsAll(List.of("visual/render_skybox", "minecraft:visual/render_skybox",
+                            "minecraft:render_skybox")), "typed setter advertises its literal aliases");
+                    extras = 3;
+                }
+                equal(SkyEnvironment.attributes().size() + extras, list.size(), "expected suggestions under " + head + prefix);
             }
         }
         List<String> shortPrefix = suggestions(dispatcher, source, "skyboxblock env get cloud");

@@ -237,6 +237,7 @@ public final class RenderRegression {
         if (suite.equals("materials")) materialScenes();
         if (suite.equals("panomotion")) panoramaMotionScenes();
         if (suite.equals("edges")) edgeScenes();
+        if (suite.equals("perf")) perfScenes();
         if (suite.equals("joints")) jointScenes();
         if (SETTLED && suite.equals("transparency")) {
             SCENES.add(new Scene("warmup-empty-front",300,mc -> {
@@ -259,6 +260,35 @@ public final class RenderRegression {
         ClientTickEvents.START_CLIENT_TICK.register(RenderRegression::panoramaMotionInput);
         ClientTickEvents.END_CLIENT_TICK.register(RenderRegression::tick);
         SkyboxBlockMod.LOGGER.info("[skybox-regression] enabled: {} scenes", SCENES.size());
+    }
+
+    private static boolean perfArmed;
+    private static final int PERF_SAMPLES = Integer.getInteger("skyboxblock.perf.frames", 600);
+
+    private static void perfScenes() {
+        if (!SkyRenderPerf.ENABLED) throw new IllegalStateException("The perf suite requires timing capture");
+        SCENES.add(new Scene("perf-empty",110,mc -> {
+            if (!FixtureClientControl.owns(mc)) throw new IllegalStateException("Performance suite requires owned world");
+            setup(mc); mc.options.hideGui=true;
+            command(mc,"time set 6000");
+            command(mc,"fill -21 140 13 21 159 13 minecraft:sandstone");
+            command(mc,"fill -3 140 12 3 147 12 minecraft:blue_concrete");
+            look(mc,.5,140,.5,.5,141.62,10);
+        }));
+        SCENES.add(new Scene("perf-small",90,mc ->
+                command(mc,"fill -1 141 9 1 142 9 skyboxblock:sky_block")));
+        SCENES.add(new Scene("perf-large",90,mc -> {
+            command(mc,"fill -18 140 9 18 158 9 skyboxblock:sky_block");
+            command(mc,"fill 3 140 8 4 147 8 minecraft:glass");
+        }));
+        SCENES.add(new Scene("perf-panorama",90,mc -> {
+            command(mc,"fill -18 140 9 18 158 9 skyboxblock:kloppenheim_sky_block");
+            command(mc,"fill 3 140 8 4 147 8 minecraft:air");
+        }));
+        SCENES.add(new Scene("perf-global-off",70,mc -> command(mc,"skyboxblock env render_skybox false")));
+        SCENES.add(new Scene("perf-player-on",70,mc -> command(mc,"skyboxblock player @s render_skybox true")));
+        SCENES.add(new Scene("perf-player-reset",70,mc -> command(mc,"skyboxblock player @s reset render_skybox")));
+        SCENES.add(new Scene("perf-restore",70,mc -> command(mc,"skyboxblock env reset render_skybox")));
     }
 
     private static void setup(Minecraft mc) {
@@ -1026,6 +1056,14 @@ public final class RenderRegression {
         if (pending != null) return;
         if (remaining > 0 && --remaining > 0) return;
         if (index >= 0 && remaining == 0) {
+            String sceneName=SCENES.get(index).name();
+            if (sceneName.startsWith("perf-")) {
+                if (!perfArmed) { SkyRenderPerf.arm(PERF_SAMPLES); perfArmed=true; return; }
+                if (!SkyRenderPerf.done()) return;
+                try { SkyRenderPerf.save(output().resolve(sceneName+".csv")); }
+                catch (IOException error) { throw new java.io.UncheckedIOException(error); }
+                perfArmed=false;
+            }
             if (SCENES.get(index).name().startsWith("dim-") && !dimensionReady(mc)) return;
             if (SETTLED && transparencyFixture!=null && !settlementReady()) return;
             if (transparencyFixture!=null) {
@@ -1069,6 +1107,8 @@ public final class RenderRegression {
         return Path.of(System.getProperty("skyboxblock.regression.output",
                 Minecraft.getInstance().gameDirectory.toPath().resolve("render-results").toString()));
     }
+    static boolean needsOpaqueCapture() { return ENABLED && (pending!=null || (SETTLED && index>=0)); }
+    static boolean needsCanvasCapture() { return ENABLED && pending!=null && !pending.startsWith("perf-"); }
     public static boolean capturePending() { return ENABLED && pending!=null && captureCandidate!=null; }
 
     /** Test-only oracle: actual vanilla sky immediately after renderSky, before terrain/clouds. */
@@ -1280,6 +1320,7 @@ public final class RenderRegression {
                     +",\n\"offhandItem\":\""+BuiltInRegistries.ITEM.getKey(mc.player.getOffhandItem().getItem())+"\""
                     +",\n\"drawStage\":\"opaque-before-iris-hand\""
                     +",\n\"blocks\":"+frame.blocks()+",\n\"vertices\":"+frame.vertices()
+                    +",\n\"renderSkybox\":"+frame.renderSkybox
                     +",\n\"cloudsEnabled\":"+SkyboxConfig.get().clouds()
                     +",\n\"cloudFrames\":"+SkyVanillaClouds.renderedFrames()
                     +",\n\"cloudWorldHeight\":"+SkyboxConfig.get().vanillaCloudHeight()

@@ -11,6 +11,8 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
@@ -27,12 +29,16 @@ public final class SkyWorldRenderer {
     private static final ArrayDeque<Frame> FRAMES=new ArrayDeque<>();
     private static final ArrayDeque<GameView> GAME_VIEWS=new ArrayDeque<>();
     private static final SkyMesh MESH=new SkyMesh();
+    private static final boolean LEGACY_RENDER_PATH=Boolean.getBoolean("skyboxblock.perf.baseline");
+    private static final int[] FACE_TRIANGLES={0,1,2,0,2,3};
+    private static final Direction[] DIRECTIONS=Direction.values();
+    private static final boolean CAPTURE_PATH=Boolean.getBoolean("skyboxfixture.enabled") || SeamScan.enabled();
     private static final boolean LEGACY_SEAMS=Boolean.getBoolean("skyboxblock.regression")
             && Boolean.getBoolean("skyboxblock.regression.negativeSeams");
     private static final boolean LEGACY_ENTITY_VALIDITY=Boolean.getBoolean("skyboxblock.regression")
             && Boolean.getBoolean("skyboxblock.regression.negativeEntityValidity");
     private static ShaderInstance shader,resolveShader;
-    private static int depthTexture,depthWidth,depthHeight,debugFrames;
+    private static int depthTexture,depthWidth,depthHeight,debugFrames,megaCompositeLogs;
     private static long transaction,viewCounter;
     private static Frame lastRoot;
 
@@ -47,11 +53,6 @@ public final class SkyWorldRenderer {
     private static final class MaterialBatch {
         float[] vertices=new float[1024];
         int count;
-        void append(float[] source,int start,int length) {
-            if(count+length>vertices.length) vertices=Arrays.copyOf(vertices,Math.max(vertices.length*2,count+length));
-            System.arraycopy(source,start,vertices,count,length);
-            count+=length;
-        }
     }
 
     public static final class Frame {
@@ -65,6 +66,8 @@ public final class SkyWorldRenderer {
         public final org.joml.Vector2f rasterJitter=new org.joml.Vector2f();
         public final float partialTick;
         public final boolean portal,shadow,root,mirrored;
+        final boolean renderSkybox;
+        private boolean usesVanillaCanvas;
         public final int viewSlot;
         public final long viewId,rootTransaction;
         public Vector4f clipPlane;
@@ -93,13 +96,20 @@ public final class SkyWorldRenderer {
         public int itrpInjectionCount,itrpSceneInputTexture,itrpOpaqueDepthTexture,itrpExposureTexture;
         public String itrpBridgeFailure,referenceWorld,referenceDisplay,preViewImage,postViewImage,viewImageStage;
         public int colorAttachment;
-        private float[] vertices=new float[1024];
+        private float[] vertices;
+        private final boolean keepCombinedVertices;
         private final Set<Long> seen=new HashSet<>();
         private final java.util.LinkedHashMap<dev.yg.skyboxblock.SkySkin,MaterialBatch> materials=new java.util.LinkedHashMap<>();
+        private long cachedChunkKey=Long.MIN_VALUE;
+        private LevelChunk cachedChunk;
 
         Frame(LevelRenderer renderer,Camera camera,Matrix4f view,Matrix4f projection,float partialTick) {
             this.renderer=renderer;
             level=((CloudMeshAccess)renderer).skyboxblock$getLevel();
+            renderSkybox=SkyboxConfig.get().environment().rendersSkybox();
+            keepCombinedVertices=LEGACY_RENDER_PATH || CAPTURE_PATH || SeamScan.enabled()
+                    || ModCompat.irisActive() || ModCompat.DISTANT_HORIZONS;
+            if(keepCombinedVertices) vertices=new float[1024];
             this.camera=camera.getPosition();
             this.projection=new Matrix4f(projection); this.view=new Matrix4f(view); this.partialTick=partialTick;
             portal=ModCompat.portalRendering(); shadow=ModCompat.irisShadowPass(); mirrored=ModCompat.mirroredPortal();
@@ -112,15 +122,27 @@ public final class SkyWorldRenderer {
         boolean collected(long packed) { return seen.contains(packed); }
         long[] collectedPositions() { return seen.stream().mapToLong(Long::longValue).toArray(); }
         private void face(dev.yg.skyboxblock.SkySkin skin,int x,int y,int z,float[] corners) {
-            int start=floatCount;
-            if (floatCount+54>vertices.length) vertices=Arrays.copyOf(vertices,vertices.length*2);
-            for (int vertex:new int[]{0,1,2,0,2,3}) {
-                int o=vertex*3;
-                vertices[floatCount++]=LEGACY_SEAMS ? (float)(x-camera.x)+corners[o] : SkyRenderMath.relativeGridVertex(x,corners[o],camera.x);
-                vertices[floatCount++]=LEGACY_SEAMS ? (float)(y-camera.y)+corners[o+1] : SkyRenderMath.relativeGridVertex(y,corners[o+1],camera.y);
-                vertices[floatCount++]=LEGACY_SEAMS ? (float)(z-camera.z)+corners[o+2] : SkyRenderMath.relativeGridVertex(z,corners[o+2],camera.z);
+            if(skin.texture()==null && skin.shaderMode()==0) usesVanillaCanvas=true;
+            MaterialBatch batch=materials.computeIfAbsent(skin,ignored -> new MaterialBatch());
+            if(batch.count+18>batch.vertices.length)
+                batch.vertices=Arrays.copyOf(batch.vertices,Math.max(batch.vertices.length*2,batch.count+18));
+            if(keepCombinedVertices) {
+                if(vertices==null) vertices=new float[1024];
+                if(floatCount+18>vertices.length) vertices=Arrays.copyOf(vertices,Math.max(vertices.length*2,floatCount+18));
             }
-            materials.computeIfAbsent(skin,ignored -> new MaterialBatch()).append(vertices,start,floatCount-start);
+            int batchStart=batch.count, combinedStart=floatCount;
+            for(int vertex:FACE_TRIANGLES) {
+                int o=vertex*3;
+                float px=LEGACY_SEAMS ? (float)(x-camera.x)+corners[o] : SkyRenderMath.relativeGridVertex(x,corners[o],camera.x);
+                float py=LEGACY_SEAMS ? (float)(y-camera.y)+corners[o+1] : SkyRenderMath.relativeGridVertex(y,corners[o+1],camera.y);
+                float pz=LEGACY_SEAMS ? (float)(z-camera.z)+corners[o+2] : SkyRenderMath.relativeGridVertex(z,corners[o+2],camera.z);
+                batch.vertices[batchStart]=px; batch.vertices[batchStart+1]=py; batch.vertices[batchStart+2]=pz;
+                if(keepCombinedVertices) {
+                    vertices[combinedStart]=px; vertices[combinedStart+1]=py; vertices[combinedStart+2]=pz;
+                }
+                batchStart+=3; combinedStart+=3;
+            }
+            batch.count+=18; floatCount+=18;
         }
     }
     private SkyWorldRenderer() {}
@@ -133,7 +155,7 @@ public final class SkyWorldRenderer {
     /** Called by a try/finally WrapMethod: cancellation and cross-portal extra views cannot leak scopes. */
     public static void beginFrame() {
         boolean root=GAME_VIEWS.isEmpty();
-        if (root) { FRAMES.clear(); lastRoot=null; transaction++; }
+        if (root) { FRAMES.clear(); lastRoot=null; transaction++; SkyRenderPerf.beginFrame(); }
         else GAME_VIEWS.peek().children++;
         GAME_VIEWS.push(new GameView(root));
     }
@@ -150,6 +172,7 @@ public final class SkyWorldRenderer {
         } finally {
             while (FRAMES.size()>game.entryWorldDepth) FRAMES.pop();
             GAME_VIEWS.pop();
+            if (game.root) SkyRenderPerf.endFrame(completed);
         }
     }
     public static void beginView(LevelRenderer renderer,Camera camera,Matrix4f view,Matrix4f projection,float partial) {
@@ -173,7 +196,8 @@ public final class SkyWorldRenderer {
         // Native renderItemInHand clears the WORLD depth buffer. Repair DH composition while
         // full near terrain/translucent depth is still alive, then let the real hand draw over it.
         // Iris retains its own immediate final-pass hook and is deliberately unchanged here.
-        if(frame!=null && !ModCompat.irisActive() && ModCompat.DISTANT_HORIZONS && DistantSkyDepth.current(frame))
+        if(frame!=null && frame.renderSkybox && frame.floatCount>0 && ModCompat.DISTANT_HORIZONS
+                && !ModCompat.irisActive() && DistantSkyDepth.current(frame))
             resolveView(frame);
         if (!FRAMES.isEmpty()) FRAMES.pop();
     }
@@ -212,7 +236,9 @@ public final class SkyWorldRenderer {
         GL11.glEnable(GL30.GL_CLIP_DISTANCE0);
     }
     /** Diagnostics reuse the exact production vertices, never reconstructed screen geometry. */
-    static void drawDiagnosticFaces(Frame frame,ShaderInstance instance) { MESH.draw(instance,frame.vertices,frame.floatCount,false); }
+    static void drawDiagnosticFaces(Frame frame,ShaderInstance instance) {
+        if(frame.vertices!=null && frame.floatCount>0) MESH.draw(instance,frame.vertices,frame.floatCount,false);
+    }
     static boolean needsDarkSkyMeter(Frame frame) {
         if (frame==null) return false;
         for (var skin:frame.materials.keySet()) if (skin.darkSky()) return true;
@@ -220,6 +246,13 @@ public final class SkyWorldRenderer {
     }
     /** All color-producing passes use identical style batches; depth-only diagnostics stay combined. */
     static void drawMaterialFaces(Frame frame,ShaderInstance instance,int vanillaTexture) {
+        drawMaterialFaces(frame,instance,vanillaTexture,true);
+    }
+    /**
+     * @param compositeMega also composite the route-A megastructure layer over the faces just drawn.
+     *     Colour-masked (diagnostic-only) passes must pass {@code false}.
+     */
+    static void drawMaterialFaces(Frame frame,ShaderInstance instance,int vanillaTexture,boolean compositeMega) {
         for(var entry:frame.materials.entrySet()) {
             dev.yg.skyboxblock.SkySkin skin=entry.getKey();
             instance.getUniform("SkyStyle").set(skin.shaderMode());
@@ -244,6 +277,57 @@ public final class SkyWorldRenderer {
             MaterialBatch batch=entry.getValue();
             MESH.draw(instance,batch.vertices,batch.count,false);
         }
+        if(compositeMega) drawMegaLayer(frame,instance);
+    }
+    /**
+     * Route A: composite the private megastructure layer over the sky surfaces that were just drawn.
+     *
+     * <p>The surface geometry is re-drawn with the screen-space style (0) and the overlay layer as its
+     * texture, so the surface itself becomes the mask: only pixels where a sky surface is visible get the
+     * structure, and terrain rendered in front of that surface still wins because the identical geometry
+     * is depth-tested with LEQUAL against the depth that surface just wrote. Depth writes stay off, so the
+     * world depth buffer is untouched.
+     *
+     * <p>This is what makes the overlay independent of the block style: a panorama surface computes its own
+     * colour without ever sampling the private sky canvas, but it contributes the same screen coverage here.
+     */
+    static void drawMegaLayer(Frame frame,ShaderInstance instance) {
+        int layer=SkyMegastructure.layerTexture();
+        if(frame==null || instance==null || layer<=0 || frame.materials.isEmpty()) return;
+        try(SkyGlState state=new SkyGlState(1)) {
+            state.clearSamplers();
+            SkyGlState.opaqueState();
+            com.mojang.blaze3d.systems.RenderSystem.depthMask(false);
+            GL11.glDepthMask(false);
+            com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+            GL11.glEnable(GL11.GL_BLEND);
+            // Premultiplied "over": the layer stores colour already multiplied by its own coverage.
+            com.mojang.blaze3d.platform.GlStateManager._blendFuncSeparate(GL11.GL_ONE,GL11.GL_ONE_MINUS_SRC_ALPHA,
+                    GL11.GL_ONE,GL11.GL_ONE_MINUS_SRC_ALPHA);
+            org.lwjgl.opengl.GL14.glBlendFuncSeparate(GL11.GL_ONE,GL11.GL_ONE_MINUS_SRC_ALPHA,
+                    GL11.GL_ONE,GL11.GL_ONE_MINUS_SRC_ALPHA);
+            instance.getUniform("SkyStyle").set(0);
+            var material=instance.getUniform("SkyMaterial");
+            if(material!=null) material.set(0);
+            var distant=instance.getUniform("DistantDepthEnabled");
+            if(distant!=null) distant.set(0);
+            var packMode=instance.getUniform("PackMode");
+            if(packMode!=null) packMode.set(0);
+            instance.setSampler("Sampler0",layer);
+            int vertices=0;
+            for(var entry:frame.materials.entrySet()) {
+                MaterialBatch megaBatch=entry.getValue();
+                // SkyMesh.draw() clears the shader's samplers after every draw, so re-bind per batch.
+                instance.setSampler("Sampler0",layer);
+                MESH.draw(instance,megaBatch.vertices,megaBatch.count,false);
+                vertices+=megaBatch.count/3;
+            }
+            if(megaCompositeLogs<3) {
+                megaCompositeLogs++;
+                SkyboxBlockMod.LOGGER.info("[skyboxblock] mega composite batches={} vertices={} layer={} err={}",
+                        frame.materials.size(),vertices,layer,GL11.glGetError());
+            }
+        }
     }
     static void drawCoverageFaces(Frame frame,ShaderInstance instance) {
         for(var entry:frame.materials.entrySet()) {
@@ -255,24 +339,31 @@ public final class SkyWorldRenderer {
     public static void collect(SkyBlockEntity block) {
         Frame frame=current();
         BlockCollectionDiagnostics.collect(frame,block);
-        if (frame==null || frame.shadow || frame.drawn || frame.level==null || block.getLevel()!=frame.level) return;
+        if (frame==null || !frame.renderSkybox || frame.shadow || frame.drawn || frame.level==null || block.getLevel()!=frame.level) return;
         var pos=block.getBlockPos();
+         var state=block.getBlockState();
         if (!LEGACY_ENTITY_VALIDITY) {
             if (block.isRemoved()) return;
-            var chunk=frame.level.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
+            long chunkKey=ChunkPos.asLong(pos.getX()>>4,pos.getZ()>>4);
+             if(frame.cachedChunkKey!=chunkKey) {
+                 frame.cachedChunkKey=chunkKey;
+                 frame.cachedChunk=frame.level.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
+             }
+             LevelChunk chunk=frame.cachedChunk;
             // Cached third-party render lists can still contain a removed/replaced instance.
             // Ownership must be validated before the old instance can occupy this view's seen set.
-            if (chunk==null || !(chunk.getBlockState(pos).getBlock() instanceof SkyBlock)
-                    || chunk.getBlockState(pos)!=block.getBlockState()
+            var currentState=chunk==null ? null : chunk.getBlockState(pos);
+             if (chunk==null || !(currentState.getBlock() instanceof SkyBlock)
+                    || currentState!=state
                     || chunk.getBlockEntities().get(pos)!=block) return;
         }
         long key=pos.asLong();
         if (!frame.seen.add(key)) return;
         long mixed=key; mixed^=mixed>>>33; mixed*=0xff51afd7ed558ccdL; mixed^=mixed>>>33; mixed*=0xc4ceb9fe1a85ec53L; mixed^=mixed>>>33;
-        if (!(block.getBlockState().getBlock() instanceof SkyBlock skyBlock)) return;
+        if (!(state.getBlock() instanceof SkyBlock skyBlock)) return;
         dev.yg.skyboxblock.SkySkin skin=skyBlock.skin();
         frame.geometrySignature+=mixed ^ (0x9e3779b97f4a7c15L * (skin.material()+1));
-        for (Direction direction:Direction.values()) if (block.shouldRenderFace(direction))
+        for (Direction direction:DIRECTIONS) if (block.shouldRenderFace(direction))
             frame.face(skin,pos.getX(),pos.getY(),pos.getZ(),FACES[direction.ordinal()]);
     }
     public static void drawOpaque() {
@@ -281,27 +372,50 @@ public final class SkyWorldRenderer {
         frame.drawn=true;
         if(frame.root && frame.floatCount==0) SkyTemporalEdgeMask.idle();
         BlockCollectionDiagnostics.opaque(frame);
+        SkyRenderPerf.view(frame.root,frame.renderSkybox,frame.floatCount/18);
+        try (var timing=SkyRenderPerf.span(SkyRenderPerf.Stage.OPAQUE,frame.root)) {
+            drawOpaquePass(frame);
+        }
+    }
+
+    private static void drawOpaquePass(Frame frame) {
+        boolean diagnosticCapture=CAPTURE_PATH || RenderRegression.needsOpaqueCapture();
+        // Empty/hidden views don't need a target, GL state, or Iris raster uniforms, except for explicit captures.
+        if ((!frame.renderSkybox || (!LEGACY_RENDER_PATH && (frame.floatCount==0 || shader==null)))
+                && !diagnosticCapture) return;
         ModCompat.copyWorldMatrices(frame.projection,frame.view);
         frame.clipPlane=ModCompat.portalClipPlane(frame.camera);
         if (frame.root) RenderRegression.beforePrivatePass();
-        try (SkyGlState originalTarget=new SkyGlState(6)) {
-            if (!ModCompat.bindOpaqueTarget()) return;
+        boolean nativeView=!ModCompat.irisActive();
+        // bindOpaqueTarget is a no-op in the native renderer, which already owns the main target.
+        try (SkyGlState originalTarget=LEGACY_RENDER_PATH || !nativeView ? new SkyGlState(6) : null) {
+            if ((LEGACY_RENDER_PATH || !nativeView) && !ModCompat.bindOpaqueTarget()) return;
             try (SkyGlState state=new SkyGlState(6)) {
                 frame.framebuffer=state.drawFramebuffer; frame.colorAttachment=state.firstDrawBuffer();
-                frame.targetViewport=state.viewport.clone(); frame.viewport=state.viewport.clone();
+                System.arraycopy(state.viewport,0,frame.targetViewport,0,4);
+                System.arraycopy(state.viewport,0,frame.viewport,0,4);
                 ModCompat.applyRasterSettings(frame,state.viewport[2],state.viewport[3]);
                 RenderRegression.prepareCapture(frame);
                 GL11.glGetDoublev(GL11.GL_DEPTH_RANGE,frame.depthRange);
-                boolean nativeView=!ModCompat.irisActive();
                 if (nativeView) PortalViewCapture.preView(frame,"opaque");
-                if (frame.floatCount==0 || shader==null) {
+                if (!frame.renderSkybox || frame.floatCount==0 || shader==null) {
                     RenderRegression.worldNoGeometry(frame);
                     if (nativeView) PortalViewCapture.postView(frame,"opaque");
                     return;
                 }
-                int skyTexture=VanillaSkyScene.render(frame,frame.viewport[2],frame.viewport[3]);
-                if (skyTexture<0) return;
-                frame.ownSkyColorTexture=skyTexture;
+                int skyTexture;
+                if (LEGACY_RENDER_PATH || frame.usesVanillaCanvas || !nativeView || ModCompat.DISTANT_HORIZONS
+                        || CAPTURE_PATH || RenderRegression.needsCanvasCapture() || SkyMegastructure.applies(frame)) {
+                    try (var timing=SkyRenderPerf.span(SkyRenderPerf.Stage.WORLD_CANVAS,frame.root)) {
+                        skyTexture=VanillaSkyScene.render(frame,frame.viewport[2],frame.viewport[3]);
+                    }
+                    if (skyTexture<0) return;
+                    frame.ownSkyColorTexture=skyTexture;
+                } else {
+                    // Opaque native view with only flat/panorama styles: no fragment samples the vanilla canvas.
+                    // Keep unused sampler slots bound to a complete texture for driver compatibility.
+                    skyTexture=VanillaSkyScene.fallbackTexture();
+                }
                 RenderRegression.beforeWorldDraw(frame);
                 int nativeLayer=0;
                 if(nativeView && resolveShader!=null && SkySurfaceLayer.available(frame)) {
@@ -331,7 +445,8 @@ public final class SkyWorldRenderer {
                     com.mojang.blaze3d.systems.RenderSystem.colorMask(false,false,false,false);
                     GL11.glColorMask(false,false,false,false);
                 }
-                drawMaterialFaces(frame,shader,skyTexture);
+                // Route A overlay is skipped while the material pass itself is colour-masked.
+                drawMaterialFaces(frame,shader,skyTexture,nativeLayer==0);
                 if(nativeLayer>0) {
                     com.mojang.blaze3d.systems.RenderSystem.colorMask(true,true,true,true);
                     GL11.glColorMask(true,true,true,true);
@@ -348,11 +463,12 @@ public final class SkyWorldRenderer {
     }
     /** Consume this view's depth immediately after its real Iris final pass, before IP snapshots/reuses it. */
     private static void resolveView(Frame frame) {
-        boolean iris=ModCompat.irisActive();
-        boolean distant=ModCompat.DISTANT_HORIZONS && DistantSkyDepth.current(frame);
-        if ((!iris && !distant) || frame==null || !frame.drawn || frame.floatCount==0
+        if (frame==null || !frame.renderSkybox || !frame.drawn || frame.floatCount==0
                 || frame.shadow || frame.finalResolved || resolveShader==null) return;
-        try (SkyGlState original=new SkyGlState(6)) {
+        boolean iris=ModCompat.irisActive();
+        if (!iris && !(ModCompat.DISTANT_HORIZONS && DistantSkyDepth.current(frame))) return;
+        try (var timing=SkyRenderPerf.span(SkyRenderPerf.Stage.RESOLVE,frame.root);
+             SkyGlState original=new SkyGlState(6)) {
             copyFinalDepth(frame);
             resolveShader.getUniform("DistantDepthEnabled").set(0);
             resolveShader.getUniform("ForegroundEdgeGuard").set(iris && (frame.rasterScale.x<.99999F || frame.rasterScale.y<.99999F
@@ -365,9 +481,15 @@ public final class SkyWorldRenderer {
                 int[] viewport=target.viewport;
                 // Native DH already has a full-resolution private canvas from this same view.
                 // Reuse it rather than drawing the sky/clouds twice just to repair DH composition.
-                int skyTexture=!iris && frame.ownSkyColorTexture>0 && frame.rasterScale.x==1F && frame.rasterScale.y==1F
-                        && frame.viewport[2]==viewport[2] && frame.viewport[3]==viewport[3]
-                        ? frame.ownSkyColorTexture : VanillaSkyScene.renderDisplay(frame,viewport[2],viewport[3]);
+                int skyTexture;
+                if (!iris && frame.ownSkyColorTexture>0 && frame.rasterScale.x==1F && frame.rasterScale.y==1F
+                        && frame.viewport[2]==viewport[2] && frame.viewport[3]==viewport[3]) {
+                    skyTexture=frame.ownSkyColorTexture;
+                } else {
+                    try (var canvasTiming=SkyRenderPerf.span(SkyRenderPerf.Stage.DISPLAY_CANVAS,frame.root)) {
+                        skyTexture=VanillaSkyScene.renderDisplay(frame,viewport[2],viewport[3]);
+                    }
+                }
                 if (skyTexture<0) return;
                 boolean temporal=iris && frame.root && !frame.portal && (frame.rasterScale.x<.99999F || frame.rasterScale.y<.99999F || frame.rasterJitter.lengthSquared()>0F);
                 int edgeHistory=temporal ? SkyTemporalEdgeMask.update(frame,viewport,depthTexture,depthWidth,depthHeight) : 0;
@@ -418,6 +540,7 @@ public final class SkyWorldRenderer {
         } else SkyGlState.bindTexture(depthTexture);
         com.mojang.blaze3d.platform.GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER,frame.framebuffer);
         GL11.glCopyTexSubImage2D(GL11.GL_TEXTURE_2D,0,0,0,frame.targetViewport[0],frame.targetViewport[1],width,height);
+        SkyRenderPerf.copies(frame.root,(long)width*height);
     }
     public static void release() {
         try (SkyGlState ignored=new SkyGlState(6)) {

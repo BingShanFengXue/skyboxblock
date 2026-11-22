@@ -5,7 +5,6 @@ import java.awt.image.DataBufferInt;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
@@ -14,9 +13,9 @@ import java.util.zip.Inflater;
  * Small, dependency-free OpenEXR decoder for panorama import.
  *
  * <p>It accepts single-part scanline and tiled files with RGB/RGBA or Y channels, half/float/uint
- * samples, and NONE/ZIP/ZIPS compression. A TX file is accepted when its payload is an OpenEXR
- * container (the format emitted by common maketx pipelines). Unsupported deep, multipart, PIZ,
- * DWAA/DWAB and exotic sampling layouts fail with a diagnostic instead of producing a corrupt sky.
+ * samples, and NONE/ZIP/ZIPS/PIZ compression. A TX file is accepted when its payload is an OpenEXR
+ * container (the format emitted by common maketx pipelines). Unsupported deep, multipart,
+ * DWAA/DWAB and subsampled channels fail with a diagnostic instead of producing a corrupt sky.
  * The decoded linear pixels are tone-mapped once at startup into the same display-referred sRGB
  * representation used by RadianceHdr.</p>
  */
@@ -108,9 +107,9 @@ public final class OpenExr {
             throw new IOException("OpenEXR 图像 " + widthLong + "x" + heightLong
                     + " 超过调用方上限 " + maxWidth + "x" + maxHeight);
         if (compression < 0) throw new IOException("OpenEXR 缺少 compression 属性");
-        if (compression != 0 && compression != 2 && compression != 3)
+        if (compression != 0 && compression != 2 && compression != 3 && compression != 4)
             throw new IOException("OpenEXR compression 不受支持：" + compression
-                    + "（支持 NONE、ZIPS、ZIP）");
+                    + "（支持 NONE、ZIPS、ZIP、PIZ）");
         if (tiled && tile == null) throw new IOException("OpenEXR tiled 文件缺少 tiles 属性");
         if (!tiled && tile != null) throw new IOException("OpenEXR tiles 属性与 scanline 版本冲突");
         for (Channel channel : channels) {
@@ -185,7 +184,7 @@ public final class OpenExr {
         int lines = Math.min(linesPerChunk(h.compression), h.maxY - yStart + 1);
         if (lines <= 0 || yStart < h.minY || yStart > h.maxY)
             throw new IOException("OpenEXR scanline y 越界：" + yStart);
-        byte[] raw = decompress(compressed, expectedBytes(h, h.width, lines), h.compression);
+        byte[] raw = decompress(compressed, h, h.width, lines);
         unpackRows(raw, h, h.width, lines, yStart - h.minY, 0, r, g, b);
     }
 
@@ -202,7 +201,7 @@ public final class OpenExr {
         if (x0 > h.maxX || y0 > h.maxY) return;
         int width = Math.min(h.tile.xSize, h.maxX - x0 + 1);
         int height = Math.min(h.tile.ySize, h.maxY - y0 + 1);
-        byte[] raw = decompress(compressed, expectedBytes(h, width, height), h.compression);
+        byte[] raw = decompress(compressed, h, width, height);
         unpackRows(raw, h, width, height, y0 - h.minY, x0 - h.minX, r, g, b);
     }
 
@@ -241,10 +240,15 @@ public final class OpenExr {
         };
     }
 
-    private static byte[] decompress(byte[] compressed, int expected, int compression) throws IOException {
-        if (compression == 0) {
-            if (compressed.length < expected) throw new IOException("OpenEXR 未压缩数据截断");
-            return compressed.length == expected ? compressed : Arrays.copyOf(compressed, expected);
+    private static byte[] decompress(byte[] compressed, Header h, int width, int height) throws IOException {
+        int expected = expectedBytes(h, width, height);
+        // EXR writers store the original bytes if the chunk would not shrink under compression.
+        if (compressed.length == expected) return compressed;
+        if (h.compression == 0 || compressed.length > expected)
+            throw new IOException("OpenEXR 数据块长度错误：" + compressed.length + "/" + expected);
+        if (h.compression == 4) {
+            int[] channelWords = h.channels.stream().mapToInt(channel -> channel.bytes() / 2).toArray();
+            return OpenExrPiz.decode(compressed, expected, width, height, channelWords);
         }
         Inflater inflater = new Inflater();
         inflater.setInput(compressed);
@@ -257,15 +261,12 @@ public final class OpenExr {
         } finally {
             inflater.end();
         }
-        // ZIP uses predictor followed by even/odd byte interleaving.
+        // OpenEXR writers reorder even/odd bytes, then predict across that reordered stream.
+        for (int i = 1; i < expected; i++) packed[i] = (byte) (packed[i] + packed[i - 1] - 128);
         byte[] restored = new byte[expected];
         int half = (expected + 1) / 2;
         for (int i = 0; i < half; i++) restored[i * 2] = packed[i];
         for (int i = half; i < expected; i++) restored[(i - half) * 2 + 1] = packed[i];
-        for (int i = 1; i < expected; i++) {
-            int value = (restored[i] & 0xff) + (restored[i - 1] & 0xff) - 128;
-            restored[i] = (byte) value;
-        }
         return restored;
     }
 
@@ -277,7 +278,13 @@ public final class OpenExr {
         return (int) total;
     }
 
-    private static int linesPerChunk(int compression) { return compression == 3 ? 16 : 1; }
+    private static int linesPerChunk(int compression) {
+        return switch (compression) {
+            case 3 -> 16; // ZIP
+            case 4 -> 32; // PIZ
+            default -> 1;
+        };
+    }
 
     private static int tileOffsetCount(int width, int height, TileInfo tile) throws IOException {
         if (tile == null || tile.xSize <= 0 || tile.ySize <= 0) throw new IOException("OpenEXR tile 尺寸无效");

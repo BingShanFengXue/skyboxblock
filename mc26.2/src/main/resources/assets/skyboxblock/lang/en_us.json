@@ -1,4 +1,6 @@
 {
+  "key.skyboxblock.toggle_render": "Toggle Sky Box Rendering",
+  "key.category.skyboxblock.controls": "Sky Box Block",
   "itemGroup.skyboxblock.sky": "Sky Box Blocks",
   "block.skyboxblock.sky_block": "Sky Box Block (Vanilla)",
   "block.skyboxblock.white_sky_block": "Sky Box Block (Pure White)",

@@ -1,6 +1,7 @@
 package dev.yg.skyboxblock.server;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -31,10 +32,9 @@ import java.util.concurrent.CompletableFuture;
  * attribute registry {@link SkyEnvironment}. The time model is {@link SkyTimeClock} (pure JDK).
  *
  * <p>The tree is deliberately <em>serialisable</em>: the command tree travels to clients in
- * {@code ClientboundCommandsPacket}, which only understands vanilla argument types. So there is
- * exactly one {@code attribute} argument node built on {@link ResourceLocationArgument#id()} (a
- * built-in type), and every value uses the built-in greedy string. A custom literal-per-attribute
- * tree or a custom {@code ArgumentType} would be dropped or fail to serialise for real players.
+ * {@code ClientboundCommandsPacket}, which only understands registered argument types. The generic
+ * environment routes use {@link ResourceLocationArgument#id()} and a greedy string. The visibility
+ * flag has literal routes so its setter can use the native {@link BoolArgumentType} instead.
  * <pre>
  * /skyboxblock                                     short usage
  * /skyboxblock environment list
@@ -100,33 +100,33 @@ public final class SkyboxServerCommands {
      * stays serialisable for {@code ClientboundCommandsPacket}.
      */
     private static LiteralArgumentBuilder<CommandSourceStack> playerNode() {
-        var attribute = attributeNode(context -> playerGet(context.getSource(), attribute(context)));
-        return Commands.literal("player")
-                .requires(SkyboxServerCommands::canMutate)
-                .then(Commands.argument("targets", net.minecraft.commands.arguments.EntityArgument.players())
-                        .then(Commands.literal("show").executes(context ->
-                                playerShow(context.getSource(), targets(context))))
-                        .then(Commands.literal("reset")
-                                .then(Commands.literal("all").executes(context ->
-                                        playerResetAll(context.getSource(), targets(context))))
-                                .then(attributeNode(context -> playerReset(context.getSource(),
-                                        targets(context), attribute(context)))))
+        var set = Commands.literal("set")
+                .then(attributeNode(context -> missingValue(context.getSource(), attribute(context)))
+                        .then(valueNode(context -> playerSet(context.getSource(), targets(context),
+                                attribute(context), value(context)))));
+        addVisibilityRoutes(set, VisibilityScope.PLAYER, false);
+        var targets = Commands.argument("targets", net.minecraft.commands.arguments.EntityArgument.players())
+                .then(Commands.literal("show").executes(context ->
+                        playerShow(context.getSource(), targets(context))))
+                .then(Commands.literal("reset")
+                        .then(Commands.literal("all").executes(context ->
+                                playerResetAll(context.getSource(), targets(context))))
+                        .then(attributeNode(context -> playerReset(context.getSource(),
+                                targets(context), attribute(context)))))
+                .then(set)
+                .then(Commands.literal(TIME)
                         .then(Commands.literal("set")
-                                .then(attributeNode(context -> missingValue(context.getSource(), attribute(context)))
-                                        .then(valueNode().executes(context -> playerSet(context.getSource(),
-                                                targets(context), attribute(context), value(context))))))
-                        .then(Commands.literal(TIME)
-                                .then(Commands.literal("set")
-                                        .then(Commands.argument(VALUE, StringArgumentType.greedyString())
-                                                .executes(context -> playerTimeSet(context.getSource(),
-                                                        targets(context), value(context)))))
-                                .then(Commands.literal("reset").executes(context ->
-                                        playerTimeReset(context.getSource(), targets(context)))))
-                        // Same shorthand as the global node: bare attribute reads, attribute + value sets.
-                        .then(attributeNode(context -> playerShowAttribute(context.getSource(),
-                                        targets(context), attribute(context)))
-                                .then(valueNode().executes(context -> playerSet(context.getSource(),
-                                        targets(context), attribute(context), value(context))))));
+                                .then(Commands.argument(VALUE, StringArgumentType.greedyString())
+                                        .executes(context -> playerTimeSet(context.getSource(),
+                                                targets(context), value(context)))))
+                        .then(Commands.literal("reset").executes(context ->
+                                playerTimeReset(context.getSource(), targets(context)))))
+                .then(attributeNode(context -> playerShowAttribute(context.getSource(),
+                        targets(context), attribute(context)))
+                        .then(valueNode(context -> playerSet(context.getSource(), targets(context),
+                                attribute(context), value(context)))));
+        addVisibilityRoutes(targets, VisibilityScope.PLAYER, true);
+        return Commands.literal("player").requires(SkyboxServerCommands::canMutate).then(targets);
     }
 
     /** Brigadier already validated the selector, so a resolution failure is a programming error. */
@@ -275,15 +275,11 @@ public final class SkyboxServerCommands {
     // ── tree ──────────────────────────────────────────────────────────────────────────────
 
     private static LiteralArgumentBuilder<CommandSourceStack> environmentNode(String name) {
-        ArgumentBuilder<CommandSourceStack, ?> attribute = attributeNode(
-                context -> get(context.getSource(), attribute(context)))
-                .then(Commands.literal("reset")
-                        .requires(SkyboxServerCommands::canMutate)
-                        .executes(context -> reset(context.getSource(), attribute(context))))
-                .then(valueNode()
-                        .requires(SkyboxServerCommands::canMutate)
-                        .executes(context -> set(context.getSource(), attribute(context), value(context))));
-        return Commands.literal(name)
+        var set = Commands.literal("set").requires(SkyboxServerCommands::canMutate)
+                .then(attributeNode(context -> missingValue(context.getSource(), attribute(context)))
+                        .then(valueNode(context -> set(context.getSource(), attribute(context), value(context)))));
+        addVisibilityRoutes(set, VisibilityScope.SERVER, false);
+        var env = Commands.literal(name)
                 .executes(context -> list(context.getSource()))
                 .then(Commands.literal("list").executes(context -> list(context.getSource())))
                 .then(Commands.literal("reload")
@@ -298,16 +294,14 @@ public final class SkyboxServerCommands {
                                 .requires(SkyboxServerCommands::canMutate)))
                 .then(Commands.literal("get").then(attributeNode(
                         context -> get(context.getSource(), attribute(context)))))
-                // `set <id>` without a value reports the usage instead of silently doing nothing.
-                .then(Commands.literal("set")
-                        .requires(SkyboxServerCommands::canMutate)
-                        .then(attributeNode(context -> missingValue(context.getSource(), attribute(context)))
-                                .then(valueNode()
-                                        .requires(SkyboxServerCommands::canMutate)
-                                        .executes(context -> set(context.getSource(), attribute(context),
-                                                value(context))))))
-                .then(attribute)
+                .then(set)
+                .then(attributeNode(context -> get(context.getSource(), attribute(context)))
+                        .then(Commands.literal("reset").requires(SkyboxServerCommands::canMutate)
+                                .executes(context -> reset(context.getSource(), attribute(context))))
+                        .then(valueNode(context -> set(context.getSource(), attribute(context), value(context)))))
                 .then(timeNode());
+        addVisibilityRoutes(env, VisibilityScope.SERVER, true);
+        return env;
     }
 
     private static boolean canMutate(CommandSourceStack source) {
@@ -325,9 +319,38 @@ public final class SkyboxServerCommands {
                 .executes(context -> command.run(context));
     }
 
-    /** Value node: built-in greedy string; {@link SkyEnvironment#parse} validates execution-side. */
-    private static ArgumentBuilder<CommandSourceStack, ?> valueNode() {
-        return Commands.argument(VALUE, StringArgumentType.greedyString());
+    private enum VisibilityScope { SERVER, PLAYER }
+
+    /** Literal IDs let Brigadier choose the native boolean parser before it sees the value. */
+    private static void addVisibilityRoutes(ArgumentBuilder<CommandSourceStack, ?> parent,
+                                            VisibilityScope scope, boolean allowQuery) {
+        var flag = SkyEnvironment.RENDER_SKYBOX;
+        for (String id : List.of(flag.shortId(), flag.id(), SkyEnvironment.NAMESPACE + flag.id(),
+                SkyEnvironment.NAMESPACE + flag.shortId())) {
+            var node = Commands.literal(id)
+                    .then(Commands.argument(VALUE, BoolArgumentType.bool())
+                            .requires(SkyboxServerCommands::canMutate)
+                            .executes(context -> {
+                                String canonical = Boolean.toString(BoolArgumentType.getBool(context, VALUE));
+                                return scope == VisibilityScope.SERVER ? set(context.getSource(), flag, canonical)
+                                        : playerSet(context.getSource(), targets(context), flag, canonical);
+                            }));
+            if (!allowQuery) node.executes(context -> missingValue(context.getSource(), flag));
+            else if (scope == VisibilityScope.SERVER) {
+                node.executes(context -> get(context.getSource(), flag))
+                        .then(Commands.literal("reset").requires(SkyboxServerCommands::canMutate)
+                                .executes(context -> reset(context.getSource(), flag)));
+            } else node.executes(context -> playerShowAttribute(context.getSource(), targets(context), flag));
+            parent.then(node);
+        }
+    }
+
+    /** Other attributes keep their original text parser. The visibility flag is not writable here. */
+    private static ArgumentBuilder<CommandSourceStack, ?> valueNode(AttributeCommand command) {
+        return Commands.argument(VALUE, StringArgumentType.greedyString())
+                .requires(SkyboxServerCommands::canMutate)
+                .executes(context -> attribute(context) == SkyEnvironment.RENDER_SKYBOX
+                        ? missingValue(context.getSource(), SkyEnvironment.RENDER_SKYBOX) : command.run(context));
     }
     @FunctionalInterface
     private interface AttributeCommand { int run(CommandContext<CommandSourceStack> context); }

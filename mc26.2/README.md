@@ -1,5 +1,15 @@
 # skyboxblock — Minecraft 26.2
 
+## 天空盒性能与可见性（2026-11-22）
+
+26.2 与主线同步 `/skyboxblock env render_skybox <true|false>` 和 `/skyboxblock player <目标> render_skybox <true|false>`，均使用原版布尔参数。默认显示，关闭仅使天空盒方块在世界中不可见，不影响碰撞。无光影/DH 合成需求时跳过两次透明缓冲复制；符合相同投影和尺寸的视图可复用天空画布。构建下载及 Iris 光影回归见 [性能与可见性报告](<../docs/SKYBOX-PERFORMANCE-2026-11-22.md>)。
+
+## OpenEXR PIZ 导入修复（2026-11-22）
+
+与 1.21.1 同步，自定义天空的 `.exr` 和以 OpenEXR 为容器的 `.tx` 现支持 **PIZ（压缩编号 4）**，并保留 NONE、ZIPS、ZIP。纯 Java 解码；原有 `.conf`、HDR 和 4096×2048 上限不变。将配置和它引用的图片放在同一 `config/skyboxblock/skyboxes/` 目录，重启游戏即可。仍只支持单部件、非 deep 的 RGB/RGBA 或 Y 图片，通道采样率须为 1×1；DWAA、DWAB 等其他压缩暂未支持。
+
+两版构建与实样验证见 [PIZ 修复记录](<../docs/EXR-PIZ-IMPORT-2026-11-22.md>)。
+
 ## HTML 网页全景实验（2026-11-14）
 
 26.2 同步支持 `.html` / `.htm` 静态全景快照，客户端默认关闭；服务端不启动浏览器并保留同一方块注册 ID。参数、性能额度、4K 截图回归与回退步骤见 [HTML-PANORAMA-EXPERIMENT-2026-11-14.md](<../docs/HTML-PANORAMA-EXPERIMENT-2026-11-14.md>)。

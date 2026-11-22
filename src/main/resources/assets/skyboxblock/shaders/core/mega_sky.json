@@ -1,0 +1,11 @@
+{
+  "vertex": "skyboxblock:mega_sky",
+  "fragment": "skyboxblock:mega_sky",
+  "attributes": ["Position"],
+  "samplers": [],
+  "uniforms": [
+    {"name": "RayInverse", "type": "matrix4x4", "count": 16,
+     "values": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]},
+    {"name": "Time", "type": "float", "count": 1, "values": [0]}
+  ]
+}

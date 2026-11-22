@@ -208,7 +208,7 @@ public final class SkyboxServerBackendRegression {
             String value = switch (attribute.kind()) {
                 case RGB -> "#123456";
                 case ARGB -> "#80112233";
-                case FLAG -> "true";
+                case FLAG -> attribute == SkyEnvironment.RENDER_SKYBOX ? "false" : "true";
                 case PHASE -> "third_quarter";
                 case NUMBER -> attribute.positive() ? "1" : attribute.id().equals("visual/star_brightness") ? "0.5" : "0";
             };
@@ -219,7 +219,8 @@ public final class SkyboxServerBackendRegression {
                 new SkyTimeClock.Setting(SkyTimeClock.Mode.RUNNING, 1234), 1000, 42);
         String encoded = SkyboxConfigPayload.encodeSettings(original);
         SkyboxSettings decoded = SkyboxConfigPayload.decodeSettings(encoded);
-        check(decoded.environment().describe().size() == 15, "all 15 attributes survive wire");
+        check(decoded.environment().describe().size() == 16, "all registered attributes survive wire");
+        check(!decoded.environment().rendersSkybox(), "wire sync preserves a hidden skybox");
         check(SkyboxConfigPayload.encodeSettings(decoded).equals(encoded), "full deterministic round trip");
         check(decoded.revision() == 42 && decoded.clockAnchor() == 1000, "revision and shared anchor survive wire");
         check(decoded.environment().color("cloud_color", 0) == (int) 0x80112233L, "ARGB sign and alpha preserved");
@@ -308,6 +309,15 @@ public final class SkyboxServerBackendRegression {
         store.setPlayerEnvironment(alice, "star_brightness", "0.9");
         store.resetPlayerAll(alice);
         check(!store.hasOverride(alice), "reset all clears every player key");
+        store.setEnvironment("render_skybox", "false");
+        check(!store.settingsFor(alice).environment().rendersSkybox() && !store.settingsFor(bob).environment().rendersSkybox(), "global hide applies to both players");
+        store.setPlayerEnvironment(alice, "render_skybox", "true");
+        check(store.forSend(alice).environment().rendersSkybox() && !store.forSend(bob).environment().rendersSkybox(), "Alice alone can see the skyboxes");
+        check(store(file).settingsFor(alice).environment().rendersSkybox(), "show override persists on restart");
+        store.resetPlayerEnvironment(alice, "render_skybox");
+        check(!store.forSend(alice).environment().rendersSkybox(), "player reset inherits global hide");
+        store.resetEnvironment("render_skybox");
+        check(store.forSend(alice).environment().rendersSkybox() && store.forSend(bob).environment().rendersSkybox(), "global reset shows skyboxes by default");
         check(merged(store, alice, "star_brightness").equals("0.5"), "reset all falls back to global");
     }
 

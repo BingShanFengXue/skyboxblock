@@ -15,7 +15,9 @@ abstract class SkyGameRenderMixin {
     @WrapMethod(method="renderLevel")
     private void skyboxblock$gameView(DeltaTracker delta,Operation<Void> original) {
         SkyWindowRenderer.beginGame();
-        try {original.call(delta);} finally {SkyWindowRenderer.endGame();}
+        boolean complete=false;
+        try { original.call(delta); complete=true; }
+        finally { SkyWindowRenderer.endGame(complete); }
     }
 
     @ModifyArg(method="renderLevel",at=@At(value="INVOKE",

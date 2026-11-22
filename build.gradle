@@ -202,7 +202,20 @@ tasks.register('openExrTest', JavaExec) {
     systemProperty 'java.awt.headless', 'true'
     args layout.buildDirectory.dir('exr-regression').get().asFile.absolutePath
 }
-tasks.named('check') { dependsOn 'hdrDecoderTest', 'customSkyConfigTest', 'hdrRegistryTest', 'materialIdentityTest', 'openExrTest' }
+tasks.register('mixedPanoramaRegistryTest', JavaExec) {
+    group = 'verification'
+    description = 'Load a mixed HDR/PIZ custom sky configuration (optionally from -PpanoramaSampleDir)'
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.yg.skyboxblock.custom.MixedPanoramaRegistryRegression'
+    systemProperty 'java.awt.headless', 'true'
+    args layout.buildDirectory.dir('mixed-panorama-regression').get().asFile.absolutePath
+    if (project.hasProperty('panoramaSampleDir')) {
+        def samples = file(project.property('panoramaSampleDir'))
+        args(['test.conf', 'Openfootage-Autumn_Forrest_4k.hdr', 'Cloudy_09_3K.exr'].collect { new File(samples, it).absolutePath })
+    }
+}
+tasks.named('check') { dependsOn 'hdrDecoderTest', 'customSkyConfigTest', 'hdrRegistryTest', 'materialIdentityTest', 'openExrTest', 'mixedPanoramaRegistryTest' }
 tasks.register('htmlPanoramaTest', JavaExec) {
     group = 'verification'
     description = 'Validate HTML panorama opt-in, registry fallback and optional Chromium capture'

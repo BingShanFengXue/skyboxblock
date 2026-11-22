@@ -1,0 +1,18 @@
+{
+  "vertex": "skyboxblock:mega_cube",
+  "fragment": "skyboxblock:mega_cube",
+  "attributes": ["Position", "Normal", "Center", "Color"],
+  "samplers": [],
+  "uniforms": [
+    {"name": "Mvp", "type": "matrix4x4", "count": 16,
+     "values": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]},
+    {"name": "StarDir", "type": "vec3", "count": 3, "values": [0.0, 0.287, -0.958]},
+    {"name": "Pivot", "type": "vec3", "count": 3, "values": [0.0, 147.1, -490.4]},
+    {"name": "Additive", "type": "float", "count": 1, "values": [0]},
+    {"name": "Time", "type": "float", "count": 1, "values": [0]},
+    {"name": "RingAngle", "type": "float", "count": 1, "values": [0]},
+    {"name": "Anim", "type": "int", "count": 1, "values": [0]},
+    {"name": "Emissive", "type": "float", "count": 1, "values": [0]},
+    {"name": "Flicker", "type": "float", "count": 1, "values": [0]}
+  ]
+}

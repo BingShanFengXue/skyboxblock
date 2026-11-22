@@ -24,6 +24,10 @@ public final class SkyBlockEntityRenderer implements BlockEntityRenderer<SkyBloc
     @Override public void extractRenderState(SkyBlockEntity entity, SkyBoxRenderState state, float partialTick,
                                              Vec3 cameraPos, ModelFeatureRenderer.CrumblingOverlay crumbling) {
         BlockEntityRenderer.super.extractRenderState(entity, state, partialTick, cameraPos, crumbling);
+        if (!SkyboxConfig.get().environment().rendersSkybox()) {
+            state.skin = null;
+            return;
+        }
         state.skin = !entity.isRemoved() && entity.getBlockState().getBlock() instanceof SkyBlock sky
                 ? sky.skin() : null;
         state.north = entity.shouldRenderFace(Direction.NORTH);

@@ -1,4 +1,6 @@
 {
+  "key.skyboxblock.toggle_render": "切换天空盒渲染",
+  "key.categories.skyboxblock": "天空盒方块",
   "itemGroup.skyboxblock.sky": "天空盒方块",
   "block.skyboxblock.sky_block": "天空盒方块（原版）",
   "block.skyboxblock.white_sky_block": "天空盒方块（纯白）",

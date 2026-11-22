@@ -70,8 +70,8 @@ public final class SkyEnvironmentRegression {
                 "visual/fog_end_distance", "visual/sky_fog_end_distance", "visual/cloud_color",
                 "visual/cloud_height", "visual/cloud_fog_end_distance", "visual/sunrise_sunset_color",
                 "visual/sun_angle", "visual/moon_angle", "visual/star_angle", "visual/moon_phase",
-                "visual/star_brightness", "visual/has_sky_occluder");
-        equal(expected.size(), attributes.size(), "exactly the fifteen documented attributes");
+                "visual/star_brightness", "visual/has_sky_occluder", "visual/render_skybox");
+        equal(expected.size(), attributes.size(), "documented attribute registry");
         for (int i = 0; i < expected.size(); i++) {
             equal(expected.get(i), attributes.get(i).id(), "registration order " + i);
             require(SkyEnvironment.attribute(expected.get(i)) != null, "registered " + expected.get(i));
@@ -118,7 +118,14 @@ public final class SkyEnvironmentRegression {
                 && suggestions.contains("visual/cloud_fog_end_distance"), "prefix suggestions: " + suggestions);
         require(SkyEnvironment.suggestions("minecraft:visual/moon").contains("minecraft:visual/moon_phase"),
                 "namespace suggestions");
-        equal(15, SkyEnvironment.shortIds().size(), "one short id per attribute");
+        equal(16, SkyEnvironment.shortIds().size(), "one short id per attribute");
+        final var render = SkyEnvironment.RENDER_SKYBOX;
+        require(SkyEnvironment.EMPTY.rendersSkybox(), "skybox renders by default");
+        equal("false", SkyEnvironment.parse(render, "false").text(), "full false stored canonically");
+        equal("true", SkyEnvironment.parse(render, "true").text(), "full true stored canonically");
+        rejects(render, "f", "render flag does not accept short false");
+        rejects(render, "t", "render flag does not accept short true");
+        require(!SkyEnvironment.fromEntries(Map.of(SkyEnvironment.key(render),"false")).rendersSkybox(), "explicit false hides skyboxes");
     }
 
     // ── typed parsing ───────────────────────────────────────────────────────────────────────

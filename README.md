@@ -1,5 +1,23 @@
 # Sky Box Block（天空盒方块）
 
+## 巨构路线 A（废案）
+
+巨构实验（`SkyMegastructure`、`megastructure/sky.bin` 与 `mega_*` shader）已归档为废案，不参与当前生产渲染。客户端不再注册其 shader，运行入口固定关闭；源码、资源和 [交接记录](<HANDOVER-megastructure.md>) 仅保留作历史参考。
+
+## 快捷键
+
+客户端新增「切换天空盒渲染」按键，默认绑定 `U`，可在 Minecraft 的「选项 → 控制 → 天空盒方块」中改键。按键只切换当前玩家，并发送与现有 `/skyboxblock player @s render_skybox true|false` 相同的服务端指令；等待当前连接的服务端快照确认后才允许下一次切换。
+
+## 天空盒性能与可见性（2026-11-22）
+
+1.21.1 与 26.2 同步减少空视图、纯色与全景材质不需要的渲染工作，保持默认分辨率。管理员可用 `/skyboxblock env render_skybox false` 隐藏全服的天空盒画面，也可用 `/skyboxblock player <目标> render_skybox true` 为指定玩家开启；开关使用原版布尔参数 `true` / `false`，默认开启，隐藏后方块保留碰撞。构建下载、原版及 Iris 光影对照见 [性能与可见性报告](<docs/SKYBOX-PERFORMANCE-2026-11-22.md>)。
+
+## OpenEXR PIZ 导入修复（2026-11-22）
+
+自定义天空的 `.exr` 和以 OpenEXR 为容器的 `.tx` 现支持 **PIZ（压缩编号 4）**，并保留 NONE、ZIPS、ZIP。两版均为纯 Java 解码；原有 `.conf`、HDR 和 4096×2048 上限不变。将配置和它引用的图片放在同一 `config/skyboxblock/skyboxes/` 目录，重启游戏即可。仍只支持单部件、非 deep 的 RGB/RGBA 或 Y 图片，通道采样率须为 1×1；DWAA、DWAB 等其他压缩不在本轮支持范围内。
+
+两版构建与实样验证见 [PIZ 修复记录](<docs/EXR-PIZ-IMPORT-2026-11-22.md>)。
+
 ## HTML 网页全景实验（2026-11-14）
 
 自定义天空可用 `.html` / `.htm` 作静态全景源；客户端显式启用后由本机 Chromium 截取 2:1 页面快照，资源仍走现有纹理渲染路径。默认关闭，服务器只注册相同样式 ID 并使用占位纹理。配置、浏览器参数、性能额度、实机回归及回退方法见 [HTML-PANORAMA-EXPERIMENT-2026-11-14.md](<docs/HTML-PANORAMA-EXPERIMENT-2026-11-14.md>)。

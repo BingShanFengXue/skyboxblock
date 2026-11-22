@@ -150,7 +150,11 @@ def main() -> int:
     parser.add_argument("--jar", type=Path, default=ROOT / "build" / "libs" / "skyboxblock-1.0.2-test.5.jar")
     parser.add_argument("--timeout", type=int, default=None,
                         help="Fixture timeout seconds; default 1800 for settled transparency, otherwise 360")
-    parser.add_argument("--suite", choices=["all", "clouds", "sky", "reference", "blue", "ambient", "handexposure", "bugs", "alignment", "seams", "seamscan", "dimensions", "transparency", "materials", "panomotion", "edges"], default="all")
+    parser.add_argument("--suite", choices=["all", "clouds", "sky", "reference", "blue", "ambient", "handexposure", "bugs", "alignment", "seams", "seamscan", "dimensions", "transparency", "materials", "panomotion", "edges", "perf"], default="all")
+    parser.add_argument("--perf-baseline", action="store_true", help="Perf-only: reinstate the old render work")
+    parser.add_argument("--perf-frames", type=int, default=600)
+    parser.add_argument("--perf-size", choices=["1280x800", "1920x1080", "2240x1260"], default="1280x800")
+    parser.add_argument("--perf-mega", action="store_true", help="Perf-only: include the experimental 1.21.1 megastructure")
     parser.add_argument("--negative-surface-layer", action="store_true", help="R34 same-binary control: retain single-sample geometry and jittered material IDs")
     parser.add_argument("--negative-dark-meter", action="store_true", help="R33 control: leave artistic dark skies in the physical exposure meter")
     parser.add_argument("--negative-panorama-rays", action="store_true", help="R32 only: reproduce translated per-face panorama directions while walking")
@@ -189,6 +193,10 @@ def main() -> int:
     parser.add_argument("--animate-shader-time", action="store_true",
                         help="Keep live shader frameTimeCounter for an explicit non-frozen diagnostic")
     options = parser.parse_args()
+    perf = options.suite == "perf"
+    width, height = options.perf_size.split("x") if perf else ("1280", "800")
+    if perf and not 60 <= options.perf_frames <= 3000:
+        parser.error("--perf-frames must be 60..3000")
     if options.timeout is None:
         options.timeout = 1800 if options.settled_transparency else 360
     if options.timeout <= 0:
@@ -265,6 +273,10 @@ def main() -> int:
     option_lines = [line for line in fixture_options.read_text(encoding="utf-8").splitlines()
                     if line.partition(":")[0] != "renderDistance"]
     fixture_options.write_text("\n".join(option_lines + ["renderDistance:" + str(initial_render_distance)]) + "\n", encoding="utf-8")
+    if perf:
+        lines = fixture_options.read_text(encoding="utf-8").splitlines()
+        lines = [line for line in lines if line.partition(":")[0] not in {"maxFps", "enableVsync", "inactivityFpsLimit", "soundCategory_master"}]
+        fixture_options.write_text("\n".join(lines + ['maxFps:260', 'enableVsync:false', 'inactivityFpsLimit:"minimized"', 'soundCategory_master:0.0']) + "\n", encoding="utf-8")
     dh_policy={"requested":options.dh_worldgen,"scope":"owned isolated fixture only; source config unchanged"}
     if options.dh_worldgen!="instance" and options.profile not in {"dh","iris-dh","compat","full"}:
         parser.error("--dh-worldgen disabled requires a profile that actually installs Distant Horizons")
@@ -319,7 +331,7 @@ def main() -> int:
         f"-Djava.library.path={launcher.NATIVES}", f"-Dorg.lwjgl.system.SharedLibraryExtractPath={launcher.NATIVES}",
         "-Dskyboxblock.debug=true", "-Dskyboxblock.regression=true", "-Dskyboxblock.regression.exit=true",
         f"-Dskyboxblock.regression.ownedGameDir={instance.resolve()}",
-        "-Dskyboxblock.regression.freezeShaderTime=" + str(options.suite in {"all", "transparency"} and not options.animate_shader_time).lower(),
+        "-Dskyboxblock.regression.freezeShaderTime=" + str(options.suite in {"all", "transparency", "perf"} and not options.animate_shader_time).lower(),
         "-Dskyboxblock.regression.nativeTransparencyControl=" + str(options.native_transparency_control).lower(),
         "-Dskyboxblock.regression.markerPattern=" + options.marker_pattern,
         "-Dskyboxblock.regression.captureJitterBits=" + (options.capture_jitter_bits or ""),
@@ -350,7 +362,11 @@ def main() -> int:
         "net.fabricmc.loader.impl.launch.knot.KnotClient", "--username", "SkyboxTest", "--version", "1.21.1",
         "--gameDir", str(instance), "--assetsDir", str(launcher.MC_ROOT / "assets"), "--assetIndex", "17",
         "--uuid", "00000000000000000000000000000000", "--accessToken", "0", "--userType", "legacy",
-        "--versionType", "release", "--width", "1280", "--height", "800", "--quickPlaySingleplayer", "fixture"]
+        "--versionType", "release", "--width", width, "--height", height, "--quickPlaySingleplayer", "fixture"]
+    if perf:
+        args[1:1] = ["-Dskyboxblock.perf.capture=true", f"-Dskyboxblock.perf.frames={options.perf_frames}",
+                     "-Dskyboxblock.perf.baseline=" + str(options.perf_baseline).lower(),
+                     "-Dskyboxblock.mega.enabled=" + str(options.perf_mega).lower()]
     settings_text = fixture_settings.read_text(encoding="utf-8") if options.shader and fixture_settings.exists() else ""
     shader_options = {key.strip(): value.strip() for line in settings_text.splitlines()
                       if not line.lstrip().startswith(("#", "!")) and "=" in line
@@ -367,7 +383,7 @@ def main() -> int:
         "negativeGlobalFluidFreeze": options.negative_global_fluid_freeze,
         "freezeFluidTicks": options.suite in {"all","transparency"} and not options.negative_global_fluid_freeze,
         "probeClouds": not options.no_probe_clouds, "freezeClouds": True,
-        "freezeShaderTime": options.suite in {"all", "transparency"} and not options.animate_shader_time,
+        "freezeShaderTime": options.suite in {"all", "transparency", "perf"} and not options.animate_shader_time,
         "nativeTransparencyControl": options.native_transparency_control, "captureJitterBits": options.capture_jitter_bits,
         "markerPattern": options.marker_pattern, "distantGenerationPolicy": dh_policy,
         "fixtureInputIsolation": "owned-client-START_CLIENT_TICK-releaseAll-and-resetToggleKeys",
@@ -386,7 +402,9 @@ def main() -> int:
         "negativeSurfaceLayer": options.negative_surface_layer,
         "negativePrivateSkyClip": options.negative_private_sky_clip,
         "negativeCloudBuffer": options.negative_cloud_buffer,
-        "heap": options.heap, "timeoutSeconds": options.timeout, "mods": selected}, indent=2), encoding="utf-8")
+        "heap": options.heap, "timeoutSeconds": options.timeout, "mods": selected,
+        "perf": {"baseline": options.perf_baseline, "samples": options.perf_frames,
+                 "size": [int(width), int(height)], "mega": options.perf_mega} if perf else None}, indent=2), encoding="utf-8")
     print("fixture:", instance, flush=True)
     start = time.monotonic()
     with (instance / "client.log").open("wb") as log:

@@ -29,6 +29,7 @@ public final class Fixture262Client implements ClientModInitializer {
     private static final AtomicBoolean busy = new AtomicBoolean();
     private static volatile JsonObject pending;
     private static int waitFrames;
+    private static boolean perfArmed;
     private static int frames;
     private static float yawStep;
     private static boolean moving;
@@ -182,6 +183,23 @@ public final class Fixture262Client implements ClientModInitializer {
         }
         JsonObject input = pending;
         if (input == null || --waitFrames > 0) return;
+        if (input.has("perf")) {
+            try {
+                if (!perfArmed) {
+                    // Reflection keeps the standalone fixture build usable with an older production jar.
+                    perf("arm", int.class, input.get("perf").getAsInt());
+                    perfArmed=true;
+                    return;
+                }
+                if (!(Boolean) perf("done", null, null)) return;
+                Path destination=control.resolve(input.get("id").getAsString()+".csv").normalize();
+                if (!destination.startsWith(control)) throw new IllegalArgumentException("perf path");
+                perf("save", Path.class, destination);
+                perfArmed=false;
+            } catch (ReflectiveOperationException | RuntimeException error) {
+                perfArmed=false; pending=null; finish(input,error); return;
+            }
+        }
         pending = null;
         if (!input.has("capture")) { finish(input, null); return; }
         String filename = input.get("capture").getAsString();
@@ -204,11 +222,17 @@ public final class Fixture262Client implements ClientModInitializer {
         } catch (Throwable error) { finish(input, error); }
     }
 
+    private static Object perf(String method, Class<?> type, Object arg) throws ReflectiveOperationException {
+        Class<?> probe=Class.forName("dev.yg.skyboxblock.client.SkyRenderPerf");
+        return type==null ? probe.getMethod(method).invoke(null) : probe.getMethod(method,type).invoke(null,arg);
+    }
+
     private static JsonObject snapshot(JsonObject input, Throwable error) {
             Minecraft mc = Minecraft.getInstance();
             JsonObject result = new JsonObject();
             result.addProperty("id", input.get("id").getAsString());
             result.addProperty("ok", error == null);
+            if (error!=null) result.addProperty("error",error.toString());
             result.addProperty("frame", frames);
             if (input.has("_commands")) result.add("commands", input.get("_commands"));
             if (input.has("_clientCommands")) result.add("clientCommands", input.get("_clientCommands"));
@@ -265,6 +289,8 @@ public final class Fixture262Client implements ClientModInitializer {
                     result.addProperty("serverEnforced", (Boolean) authority.getMethod("enforced").invoke(null));
                     Object settings = authority.getMethod("get").invoke(null);
                     result.addProperty("serverRevision", ((Number) settings.getClass().getMethod("revision").invoke(settings)).longValue());
+                    Object environment=settings.getClass().getMethod("environment").invoke(settings);
+                    result.addProperty("renderSkybox",(Boolean) environment.getClass().getMethod("rendersSkybox").invoke(environment));
                 } catch (ReflectiveOperationException ignored) { }
                 JsonArray names = new JsonArray();
                 BuiltInRegistries.BLOCK.forEach(block -> {

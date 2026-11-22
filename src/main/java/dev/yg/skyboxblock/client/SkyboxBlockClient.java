@@ -11,6 +11,7 @@ public final class SkyboxBlockClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
         BlockEntityRendererRegistry.register(SkyboxBlockMod.SKY_BLOCK_ENTITY, SkyBlockEntityRenderer::new);
         SkyboxServerState.register();
+        SkyboxRenderToggle.register();
         CustomSkyCommand.register();
         registerCustomStylePack();
         HtmlDynamicSkyManager.register();
@@ -33,6 +34,10 @@ public final class SkyboxBlockClient implements ClientModInitializer {
             context.register(SkyboxBlockMod.id("vanilla_celestial"), DefaultVertexFormat.POSITION_TEX, VanillaSkyScene::setCelestial);
             context.register(SkyboxBlockMod.id("vanilla_stars"), DefaultVertexFormat.POSITION, VanillaSkyScene::setStars);
             context.register(SkyboxBlockMod.id("vanilla_cloud"), DefaultVertexFormat.POSITION_TEX_COLOR_NORMAL, SkyVanillaClouds::setShader);
+            // 巨构路线 A 已标为废案；以下 shader 不参与生产注册。
+            // mega_sky registration intentionally disabled (historical废案)
+            // mega_backdrop registration intentionally disabled (historical废案)
+            // mega_cube registration intentionally disabled (historical废案)
         });
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register(
                 (handler, client) -> client.execute(SkyWorldRenderer::release));

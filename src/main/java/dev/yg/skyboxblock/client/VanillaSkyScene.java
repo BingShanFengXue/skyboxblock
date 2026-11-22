@@ -124,6 +124,14 @@ public final class VanillaSkyScene {
             RenderRegression.sceneSnapshot(canvas,stage+"base");
             SkyVanillaClouds.render(frame.renderer,frame.level,frame.camera,frame.view,projection,frame.partialTick,sky);
             RenderRegression.sceneSnapshot(canvas,stage+"clouds");
+            // Route A: render the skybox-test megastructure into its private overlay layer. The layer is
+            // composited over whichever sky surface ends up on screen (see SkyWorldRenderer.drawMegaLayer),
+            // so it is visible for every block style instead of only for the plain sky_block canvas.
+            // Disabled with -Dskyboxblock.mega.enabled=false.
+            if(SkyMegastructure.applies(frame)) {
+                SkyMegastructure.renderLayer(frame,width,height,projection);
+                RenderRegression.sceneSnapshot(canvas,stage+"mega");
+            }
             PortalViewCapture.privateScene(frame,canvas,display);
             return canvas.getColorTextureId();
         }
@@ -140,6 +148,9 @@ public final class VanillaSkyScene {
         float[] vertices=SkyVanillaGeometry.celestial(size,y,moon,u0,v0,u1,v1);
         MESH.draw(shader,vertices,vertices.length,true);
     }
+    /** Complete texture for sampler slots that the flat/panorama shader branches do not read. */
+    static int fallbackTexture() { return texture(SUN); }
+
     private static int texture(ResourceLocation location) {
         SkyGlState.active(GL13.GL_TEXTURE0);
         int id=Minecraft.getInstance().getTextureManager().getTexture(location).getId();

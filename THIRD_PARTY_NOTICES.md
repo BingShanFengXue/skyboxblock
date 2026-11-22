@@ -77,3 +77,7 @@ CC0 素材不要求署名，此处仍按上游记录致谢：**Poly Haven**（Gr
 HDR 来源目录附注原文：`标注为httpswww.bilibili.comvideoBV1mLHKekEDH即可`。本包保留该标注；这一目录附注和文件名不是完整上游许可证明。本轮未把第三方素材的作者及完整许可核查冒充为已完成。
 
 全部全景做周期经度与极点连续处理；生成器为 [prepare-r31-materials.py](<tools/prepare-r31-materials.py>)。每个输入及转换输出的 SHA-256、色调参数、12条边误差见 [r31-material-assets.json](<docs/evidence/r31-material-assets.json>)。纯白／纯黑颜色及生成图标为本项目生成，不取自上述第三方素材。
+
+## 8. OpenEXR PIZ 解码（2026-11-22）
+
+`OpenExrPiz` 的小波与 Huffman 解码参考并改写自 OpenEXR v3.4.4 的 [internal_piz.c](https://github.com/AcademySoftwareFoundation/openexr/blob/v3.4.4/src/lib/OpenEXRCore/internal_piz.c) 与 [ImfHuf.cpp](https://github.com/AcademySoftwareFoundation/openexr/blob/v3.4.4/src/lib/OpenEXR/ImfHuf.cpp)。Copyright (c) Contributors to the OpenEXR Project，按 [BSD-3-Clause](<LICENSES/OpenEXR.txt>) 分发。模组运行时不包含 OpenEXR 本机库；官方 Python 绑定仅用于生成合成测试样本和对照验证。

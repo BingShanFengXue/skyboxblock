@@ -125,6 +125,10 @@ public final class SkyEnvironment {
     public static final Attribute HAS_SKY_OCCLUDER = register(new Attribute("visual/has_sky_occluder", Kind.FLAG,
             0, 0, 0, "天空是否有遮挡体（26.4 新增）"));
 
+    /** World rendering only: invisible skybox blocks keep their collision, selection and save data. */
+    public static final Attribute RENDER_SKYBOX = register(new Attribute("visual/render_skybox", Kind.FLAG,
+            0, 1, 1, "是否渲染天空盒方块（默认 true；关闭时只隐藏画面）"));
+
     /** All registered attributes in registration order. */
     public static List<Attribute> attributes() { return List.copyOf(REGISTRY.values()); }
 
@@ -268,7 +272,7 @@ public final class SkyEnvironment {
     private static String canonicalFlag(Attribute attribute, String text) {
         if (text.equalsIgnoreCase("true")) return "true";
         if (text.equalsIgnoreCase("false")) return "false";
-        throw new InvalidValueException(attribute.id() + " 只接受 true 或 false，拒绝：" + text);
+        throw new InvalidValueException(attribute.id() + " 只接受 true 或 false，收到：" + text);
     }
 
     private static int canonicalPhase(Attribute attribute, String text) {
@@ -317,8 +321,16 @@ public final class SkyEnvironment {
     public static final SkyEnvironment EMPTY = new SkyEnvironment(Map.of());
 
     private final Map<String, Value> values;
+    private final boolean rendersSkybox;
 
-    private SkyEnvironment(Map<String, Value> values) { this.values = values; }
+    private SkyEnvironment(Map<String, Value> values) {
+        this.values = values;
+        Value override = values.get(RENDER_SKYBOX.id());
+        rendersSkybox = override == null || override.flag();
+    }
+
+    /** Cached in this immutable snapshot; safe to read once per render view. */
+    public boolean rendersSkybox() { return rendersSkybox; }
 
     /**
      * Builds a snapshot from config entries. Keys not under {@link #KEY_PREFIX} are ignored; an

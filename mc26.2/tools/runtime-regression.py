@@ -21,7 +21,7 @@ import uuid
 PROJECT = Path(__file__).resolve().parents[1]
 ROOT = PROJECT / 'build' / 'render-regression'
 SOURCE = Path(r'D:\Program Files\Game\Minecraft\PCL\.minecraft\versions\26.2-Fabric 0.20.1')
-JAVA = Path(r'C:\Program Files\Java\jdk-25.0.4.1\bin\java.exe')
+JAVA = Path(os.environ.get('SKYBOX_JAVA25_EXE', r'C:\Program Files\Java\jdk-25.0.4.1\bin\java.exe'))
 FIXTURE = PROJECT / 'build' / 'fixture262-control.jar'
 PACKS = ['iterationRP Alpha 0.8.31.zip', 'ComplementaryReimagined_r5.9.3.zip', 'photon_v1.4.zip', 'BSL_v10.1.1.zip']
 
@@ -137,6 +137,7 @@ def launch(args):
     missing = [p for p in cp if not Path(p).is_file()]
     if missing:
         raise FileNotFoundError(missing)
+    width, height = getattr(args, 'size', (960, 600))
     jvm = [str(JAVA), '-Xms1G', '-Xmx4G', '--sun-misc-unsafe-memory-access=allow',
            '--enable-native-access=ALL-UNNAMED', f'-Djava.library.path={module.NATIVES / "java"}',
            f'-Djna.tmpdir={module.NATIVES / "jna"}', f'-Dorg.lwjgl.system.SharedLibraryExtractPath={module.NATIVES / "lwjgl"}',
@@ -145,7 +146,7 @@ def launch(args):
            version['mainClass'], '--username', 'Regression', '--version', '26.2', '--gameDir', str(game),
            '--assetsDir', str(module.MC_ROOT / 'assets'), '--assetIndex', version['assetIndex']['id'],
            '--uuid', '00000000000000000000000000000000', '--accessToken', '0', '--userType', 'legacy',
-           '--versionType', 'release', '--width', '960', '--height', '600', '--quickPlaySingleplayer', 'fixture']
+           '--versionType', 'release', '--width', str(width), '--height', str(height), '--quickPlaySingleplayer', 'fixture']
     if args.jvm:
         jvm[1:1] = args.jvm
     # A relaunch must not replay the previous process's final stop command.
@@ -156,7 +157,8 @@ def launch(args):
         proc = subprocess.Popen(jvm, stdout=stream, stderr=subprocess.STDOUT, cwd=game,
                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
     write_json(case / 'process.json', {'pid': proc.pid, 'args': jvm, 'started': time.time()})
-    print(f'pid={proc.pid} log={case / "client.log"}')
+    print(f'pid={proc.pid} log={case / "client.log"}', flush=True)
+    return proc
 
 
 def process_alive(pid):
