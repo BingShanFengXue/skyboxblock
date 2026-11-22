@@ -263,7 +263,7 @@ python tools/verify-skybox-package.py
     > 改动说明：原图经用户提亮（gamma 0.55）后由本项目以 Lanczos 缩至 4096×2048 RGB PNG；对应的方块缩略图与物品图标由该图派生，同受 CC BY 4.0 约束。
   - 逐件协议、作者与来源页见[素材清单](<docs/third-party-evidence/asset-manifest.csv>)，逐来源署名模板见[来源与协议](<docs/third-party-evidence/sources-and-licenses.md>)，完整分类见[来源与第三方声明第 7 节](<THIRD_PARTY_NOTICES.md>)。
 - 当前[方块贴图](<src/main/resources/assets/skyboxblock/textures/block/sky_block.png>)与[图标](<src/main/resources/assets/skyboxblock/icon.png>)均逐像素吻合[自有生成器](<tools/gen-skybox-textures.py>)；标记为本项目原创生成资源（AI辅助）。日月／云采用运行时游戏资源，不重新分发 Minecraft 原始日月云贴图。
-- **AI署名**：早期部分实现由 DeepSeek V4.1 Flash 辅助完成（用户确认）；本轮接手、修复、验证及文档由 ChatGPT（OpenAI）与用户选择的 GPT6.1SOL 工程子个体辅助完成。提醒专用 DeepSeek 个体没有参与本轮开发，已取消。
+- **AI署名**：早期部分实现由 DeepSeek V4.1 Flash 辅助完成（用户确认）；R35–R36 与 R40–R41 阶段的实现、验证及文档由 ChatGPT（OpenAI）、用户选择的 GPT6.1SOL 工程子个体，以及 **GPT-6.2 SOL** 路由上的工程子任务辅助完成。均为运行时路由标签，不构成独立版权主张；提醒专用 DeepSeek 个体没有参与开发，已取消。
 
 binary/source 构建规则均携带署名与 NOTICE；作者已按本人确认更正为 **Bing6512**，新候选包实际内容会逐包核验。旧冻结包保持原始历史字节，不静默覆盖。
 

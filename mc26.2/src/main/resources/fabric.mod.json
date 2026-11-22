@@ -10,7 +10,8 @@
   "contributors": [
     "ChatGPT (OpenAI) - current AI-assisted engineering and verification",
     "DeepSeek V4.1 Flash - early AI-assisted implementation",
-    "GPT6.1SOL engineering subagents - user-selected runtime route"
+    "GPT6.1SOL engineering subagents - user-selected runtime route",
+    "GPT-6.2 SOL - R40-R41 engineering subtasks (recorded runtime route label)"
   ],
   "contact": {},
   "license": "MIT",

@@ -22,6 +22,12 @@ The temporary **DeepSeek V4.1 Flash reminder-only agent** in the earlier takeove
 
 These are recorded runtime route labels. They do not change project ownership, licenses or the historical credits above.
 
+### R40–R41 custom formats, HTML capture, render toggle (2026-11-14 → 2026-11-22)
+
+- **ChatGPT (OpenAI), main engineering agent** — multi-format import (PNG, JPG, Radiance HDR, OpenEXR including PIZ), HTML panorama capture and the dynamic-mode experiment, render toggle and the performance pass, megastructure retirement, build and remap tooling, delivery.
+- **GPT-6.2 SOL** — assisted this development stage with engineering subtasks on the runtime-route recorded as `GPT-6.2 SOL`. The author confirmed the participation; this is a recorded runtime route label, not a separate copyright claim, and it does not reattribute earlier work.
+- **DeepSeek V4.1 Flash engineering subagents** — attribute, command and persistence work credited in the R35 section above.
+
 ## Upstream recognition
 
 - **Kristiāns Micītis / Literal Sky Block** — early block/entity/BER design reference and rendering concept; the existing upstream MIT acknowledgement is retained conservatively for the project's early derivative/reference history.
