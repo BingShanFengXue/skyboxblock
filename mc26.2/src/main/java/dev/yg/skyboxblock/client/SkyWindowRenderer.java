@@ -2,10 +2,12 @@ package dev.yg.skyboxblock.client;
 
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
+import dev.yg.skyboxblock.SkyBlockEntity;
 import dev.yg.skyboxblock.SkySkin;
 import dev.yg.skyboxblock.SkyboxBlockMod;
 import dev.yg.skyboxblock.client.state.SkyBoxRenderState;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Util;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.Vec3;
@@ -26,6 +28,11 @@ public final class SkyWindowRenderer {
     private static final boolean FIXTURE_INPUTS=FIXTURE_CONTROL && !SkyRenderPerf.ENABLED;
     private static final int[] FACE_TRIANGLES={0,1,2,0,2,3};
     private static final Identifier SUN=Identifier.withDefaultNamespace("textures/environment/celestial/sun.png");
+    // 0.3 is the vanilla extraction gate; a 0.05 cushion covers the time from extraction to this pass.
+    private static final float SECTION_FADE_BE_THRESHOLD=0.35F;
+    private static final SkyBlockEntityRenderer FADE_ENTITY_EXTRACTOR=new SkyBlockEntityRenderer();
+    private static final ThreadLocal<SkyBoxRenderState> FADE_RENDER_STATE=ThreadLocal.withInitial(SkyBoxRenderState::new);
+    private static final Matrix4fc FADE_POSE=new Matrix4f();
     private static boolean projectionValid;
     private static volatile boolean reloadRequested;
     private static SkyGlProgram window,itrpBackground;
@@ -45,6 +52,7 @@ public final class SkyWindowRenderer {
         final java.util.HashSet<Long> seen=new java.util.HashSet<>();
         final Vec3 camera;
         final SkySceneState sky;
+        final float partialTick;
         final boolean shadow,renderSkybox;
         final int slot;
         boolean lateResolve,usesVanillaCanvas;
@@ -58,7 +66,7 @@ public final class SkyWindowRenderer {
         boolean itrpInjected;
         int itrpSceneInput,itrpOpaqueDepth,itrpExposure;
         Frame(LevelRenderState state,Matrix4fc view,float partial,int slot) {
-            this.slot=slot;this.view.set(view);camera=state.cameraRenderState.pos;
+            this.slot=slot;this.view.set(view);camera=state.cameraRenderState.pos;partialTick=partial;
             projection.set(projectionValid ? PROJECTION : state.cameraRenderState.projectionMatrix);
             renderSkybox=SkyboxConfig.get().environment().rendersSkybox();
             shadow=ModCompat.irisShadowPass();sky=renderSkybox ? new SkySceneState(state,partial) : null;
@@ -165,10 +173,45 @@ public final class SkyWindowRenderer {
     /** Invoked inside the actual framegraph main pass immediately AFTER executeSolid(). */
     public static void drawOpaque() {
         Frame f=FRAMES.peek();if(f==null||f.drawn||f.shadow)return;
-        f.drawn=true;
-        if (!LEGACY_RENDER_PATH && !SkyRenderPerf.ENABLED && (!f.renderSkybox || f.batches.isEmpty())) return;
-        SkyRenderPerf.view(f.root(),f.renderSkybox,f.faces);
-        try(var timing=SkyRenderPerf.span(SkyRenderPerf.Stage.OPAQUE,f.root())) { drawOpaquePass(f); }
+        try(var timing=SkyRenderPerf.span(SkyRenderPerf.Stage.OPAQUE,f.root())) {
+            if(f.renderSkybox)collectFadeSkippedSkyBlocks(f);
+            f.drawn=true;
+            if (!LEGACY_RENDER_PATH && !SkyRenderPerf.ENABLED && (!f.renderSkybox || f.batches.isEmpty())) return;
+            SkyRenderPerf.view(f.root(),f.renderSkybox,f.faces);
+            drawOpaquePass(f);
+        }
+    }
+    static boolean visibilityNeedsSkySupplement(float visibility) {
+        return visibility<SECTION_FADE_BE_THRESHOLD;
+    }
+    /**
+     * 26.2 skips every block entity in a freshly visible section while its chunk-fade visibility is
+     * below 0.3. Sky windows have no block-model fallback, so selectively collect those sky BEs here.
+     * The native section list, render-distance test, state extraction and normal frame de-duplication
+     * remain authoritative; no global BE list or extra GPU work is introduced.
+     */
+    private static void collectFadeSkippedSkyBlocks(Frame frame) {
+        if(!frame.root() || !frame.renderSkybox || frame.shadow) return;
+        Minecraft mc=Minecraft.getInstance();
+        if(mc.level==null || mc.levelRenderer==null || mc.options.chunkSectionFadeInTime().get()<=0.0) return;
+        var sections=mc.levelRenderer.visibleSections();
+        if(sections.isEmpty()) return;
+        long now=Util.getMillis();
+        SkyBoxRenderState scratch=null;
+        for(var section:sections) {
+            if(!visibilityNeedsSkySupplement(section.getVisibility(now))) continue;
+            var mesh=section.getSectionMesh();
+            if(mesh==null) continue;
+            for(var blockEntity:mesh.getRenderableBlockEntities()) {
+                if(!(blockEntity instanceof SkyBlockEntity sky) || sky.isRemoved() || sky.getLevel()!=mc.level
+                        || mc.level.getBlockEntity(sky.getBlockPos())!=sky
+                        || !FADE_ENTITY_EXTRACTOR.shouldRender(sky,frame.camera)) continue;
+                if(frame.seen.contains(sky.getBlockPos().asLong())) continue;
+                if(scratch==null) scratch=FADE_RENDER_STATE.get();
+                FADE_ENTITY_EXTRACTOR.extractRenderState(sky,scratch,frame.partialTick,frame.camera,null);
+                if(scratch.skin!=null) collect(scratch,FADE_POSE);
+            }
+        }
     }
     private static void drawOpaquePass(Frame f) {
         if(!f.renderSkybox || f.batches.isEmpty() || ModCompat.irisShadowPass())return;
