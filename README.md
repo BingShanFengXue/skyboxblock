@@ -4,6 +4,20 @@
 
 巨构实验（`SkyMegastructure`、`megastructure/sky.bin` 与 `mega_*` shader）已归档为废案，不参与当前生产渲染。客户端不再注册其 shader，运行入口固定关闭；源码、资源和 [交接记录](<HANDOVER-megastructure.md>) 仅保留作历史参考。
 
+## 渲染距离与缺面兜底（2026-11-26）
+
+本机可用客户端指令调整天空盒方块的渲染距离：
+
+```mcfunction
+/skyboxcustom renderdistance            # 查询
+/skyboxcustom renderdistance set 512    # 16..4096
+/skyboxcustom renderdistance reset      # 恢复 256
+```
+
+默认 **256** 格，上限 **4096** 格（实际大于原版可达视距，等于取消距离门）。只影响本机，服务器统管天空外观时仍可单独设置；也可用 `-Dskyboxblock.skyboxRenderDistance=512` 覆盖，改完无需重启。
+
+遮挡后快速显露时可能出现天空盒面短暂缺失：本版在不透明绘制前遍历本模组维护的已加载天空盒实体索引补收漏掉的方块，不依赖原版或 Sodium 的区块渲染列表。详见[渲染距离与缺面复查](<docs/RENDER-DISTANCE-2026-11-26.md>)。
+
 ## 快捷键
 
 客户端新增「切换天空盒渲染」按键，默认绑定 `U`，可在 Minecraft 的「选项 → 控制 → 天空盒方块」中改键。按键只切换当前玩家，并发送与现有 `/skyboxblock player @s render_skybox true|false` 相同的服务端指令；等待当前连接的服务端快照确认后才允许下一次切换。

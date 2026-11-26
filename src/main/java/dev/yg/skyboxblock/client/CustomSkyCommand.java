@@ -1,5 +1,6 @@
 package dev.yg.skyboxblock.client;
 
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import dev.yg.skyboxblock.custom.CustomSkyRegistry;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -31,8 +32,53 @@ public final class CustomSkyCommand {
                     .executes(context -> open(context.getSource())));
             root.then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("list")
                     .executes(context -> list(context.getSource())));
+            root.then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("renderdistance")
+                    .executes(context -> renderDistance(context.getSource()))
+                    .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("set")
+                            .then(com.mojang.brigadier.builder.RequiredArgumentBuilder.<FabricClientCommandSource,Integer>argument(
+                                            "blocks",IntegerArgumentType.integer())
+                                    .executes(context -> setRenderDistance(context.getSource(),
+                                            IntegerArgumentType.getInteger(context,"blocks")))))
+                    .then(LiteralArgumentBuilder.<FabricClientCommandSource>literal("reset")
+                            .executes(context -> resetRenderDistance(context.getSource()))));
             dispatcher.register(root);
         });
+    }
+
+    private static int renderDistance(FabricClientCommandSource source) {
+        source.sendFeedback(Component.translatable("command.skyboxblock.render_distance.value",
+                SkyboxConfig.get().skyboxRenderDistance(),SkyboxConfig.DEFAULT_SKYBOX_RENDER_DISTANCE,
+                SkyboxConfig.MAX_SKYBOX_RENDER_DISTANCE));
+        return SkyboxConfig.get().skyboxRenderDistance();
+    }
+
+    private static int setRenderDistance(FabricClientCommandSource source,int distance) {
+        try {
+            SkyboxConfig.setSkyboxRenderDistance(distance);
+            int actual=SkyboxConfig.get().skyboxRenderDistance();
+            source.sendFeedback(Component.translatable("command.skyboxblock.render_distance.set",distance));
+            if(actual!=distance) source.sendFeedback(Component.translatable(
+                    "command.skyboxblock.render_distance.jvm_override",actual).withStyle(ChatFormatting.YELLOW));
+            return actual;
+        } catch(java.io.IOException | IllegalArgumentException error) {
+            source.sendError(Component.translatable("command.skyboxblock.render_distance.failed",error.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int resetRenderDistance(FabricClientCommandSource source) {
+        try {
+            SkyboxConfig.resetSkyboxRenderDistance();
+            int actual=SkyboxConfig.get().skyboxRenderDistance();
+            source.sendFeedback(Component.translatable("command.skyboxblock.render_distance.reset",
+                    SkyboxConfig.DEFAULT_SKYBOX_RENDER_DISTANCE));
+            if(actual!=SkyboxConfig.DEFAULT_SKYBOX_RENDER_DISTANCE) source.sendFeedback(Component.translatable(
+                    "command.skyboxblock.render_distance.jvm_override",actual).withStyle(ChatFormatting.YELLOW));
+            return actual;
+        } catch(java.io.IOException error) {
+            source.sendError(Component.translatable("command.skyboxblock.render_distance.failed",error.getMessage()));
+            return 0;
+        }
     }
 
     private static int open(FabricClientCommandSource source) {

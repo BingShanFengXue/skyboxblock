@@ -40,19 +40,24 @@ public final class SkyWindowCoreRegression {
         hook("net/minecraft/client/renderer/GameRenderer","renderLevel","net/minecraft/client/renderer/ProjectionMatrixBuffer","getBuffer","(Lorg/joml/Matrix4f;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;",1);
         final boolean[] reload={false};readClass("net/minecraft/client/renderer/texture/TextureManager",new ClassVisitor(Opcodes.ASM9){@Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){if(name.equals("lambda$reload$2"))reload[0]=true;return null;}});
         check(reload[0],"26.2 native resource apply lambda exists");
-        final int[] distance={-1};
+        final boolean[] distanceFromConfig={false};
         readClass("dev/yg/skyboxblock/client/SkyBlockEntityRenderer",new ClassVisitor(Opcodes.ASM9){
             @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
                 if(!name.equals("getViewDistance")||!desc.equals("()I"))return null;
-                return new MethodVisitor(Opcodes.ASM9){@Override public void visitIntInsn(int opcode,int operand){distance[0]=operand;}};
+                return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyboxConfig")&&method.equals("skyboxRenderDistance"))distanceFromConfig[0]=true;
+                    }
+                };
             }
         });
-        check(distance[0]==256,"1.21.1 sky-window visibility distance is retained, not engine default 64");
-        check(SkyWindowRenderer.visibilityNeedsSkySupplement(Math.nextDown(.35F)),"section below the fade handoff cushion is supplemented");
-        check(!SkyWindowRenderer.visibilityNeedsSkySupplement(.35F),"section at the fade handoff limit uses native path only");
-        check(SkyWindowRenderer.visibilityNeedsSkySupplement(0F),"newly uploaded section is supplemented");
-        check(!SkyWindowRenderer.visibilityNeedsSkySupplement(1F),"fully visible section is not supplemented");
-        fadeSupplementHook();
+        check(distanceFromConfig[0],"sky-window visibility distance comes from the configurable local limit, not engine default 64");
+        check(SkyboxConfig.DEFAULT_SKYBOX_RENDER_DISTANCE==256,"default sky-window distance stays 256 blocks");
+        check(SkyboxConfig.MAX_SKYBOX_RENDER_DISTANCE==4096,"sky-window distance can be raised to 4096 blocks");
+        check(SkyboxConfig.parseSkyboxRenderDistance("4096")==4096,"configured distance accepts the upper bound");
+        check(SkyboxConfig.parseSkyboxRenderDistance("15")==256,"configured distance rejects values below the lower bound");
+        check(SkyboxConfig.parseSkyboxRenderDistance("4097")==256,"configured distance rejects values above the upper bound");
+        suppressSupplementHook();
         for(double camera:new double[]{-20000000.13,-1000000.03,-.2,.123456,1000000.999,20000000.6}) {
             int base=(int)Math.floor(camera);
             for(int offset=-31;offset<=31;offset++) {
@@ -72,19 +77,15 @@ public final class SkyWindowCoreRegression {
         check(exactVertices[0]==3,"production face collection uses original double-before-float XYZ grid conversion");
         System.out.println("SkyWindowCoreRegression: "+checks+" checks passed (inverse VP, bob, raster, panorama, exact 26.2 hooks)");
     }
-    private static void fadeSupplementHook()throws Exception {
-        final boolean[] visibleSections={false},visibility={false},sectionMesh={false},entities={false},distance={false},liveOwnership={false},threshold={false},collect={false},beforeDrawn={false};
+    private static void suppressSupplementHook()throws Exception {
+        final boolean[] loadedIndex={false},liveOwnership={false},distanceConfig={false},collect={false},beforeDrawn={false};
         readClass("dev/yg/skyboxblock/client/SkyWindowRenderer",new ClassVisitor(Opcodes.ASM9){
             @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
-                if(name.equals("collectFadeSkippedSkyBlocks")) return new MethodVisitor(Opcodes.ASM9){
+                if(name.equals("collectSkippedSkyBlocks")) return new MethodVisitor(Opcodes.ASM9){
                     @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
-                        if(owner.equals("net/minecraft/client/renderer/LevelRenderer")&&method.equals("visibleSections"))visibleSections[0]=true;
-                        if(owner.endsWith("RenderSection")&&method.equals("getVisibility"))visibility[0]=true;
-                        if(owner.endsWith("RenderSection")&&method.equals("getSectionMesh"))sectionMesh[0]=true;
-                        if(owner.endsWith("SectionMesh")&&method.equals("getRenderableBlockEntities"))entities[0]=true;
+                        if(owner.equals("dev/yg/skyboxblock/SkyBlockEntity")&&method.equals("loaded"))loadedIndex[0]=true;
                         if(owner.equals("net/minecraft/client/multiplayer/ClientLevel")&&method.equals("getBlockEntity"))liveOwnership[0]=true;
-                        if(owner.equals("dev/yg/skyboxblock/client/SkyBlockEntityRenderer")&&method.equals("shouldRender"))distance[0]=true;
-                        if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("visibilityNeedsSkySupplement"))threshold[0]=true;
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyboxConfig")&&method.equals("skyboxRenderDistance"))distanceConfig[0]=true;
                         if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("collect"))collect[0]=true;
                     }
                 };
@@ -92,7 +93,7 @@ public final class SkyWindowCoreRegression {
                     final boolean[] supplementCalled={false};
                     return new MethodVisitor(Opcodes.ASM9){
                         @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
-                            if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("collectFadeSkippedSkyBlocks"))supplementCalled[0]=true;
+                            if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("collectSkippedSkyBlocks"))supplementCalled[0]=true;
                         }
                         @Override public void visitFieldInsn(int op,String owner,String field,String d){
                             if(op==Opcodes.PUTFIELD&&owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer$Frame")
@@ -103,12 +104,10 @@ public final class SkyWindowCoreRegression {
                 return null;
             }
         });
-        check(visibleSections[0],"fade fallback scans the owning renderer visible-section list");
-        check(visibility[0]&&threshold[0],"fade fallback uses the native section-visibility gate");
-        check(sectionMesh[0]&&entities[0],"fade fallback only reads compiled section block entities");
-        check(liveOwnership[0],"fade fallback rejects section-mesh entities not owned by the current client level");
-        check(distance[0],"fade fallback retains the block entity renderer distance policy");
-        check(collect[0]&&beforeDrawn[0],"fade fallback feeds the regular collector before the frame closes collection");
+        check(loadedIndex[0],"supplement walks the loaded sky-window index instead of a renderer section list");
+        check(liveOwnership[0],"supplement rejects indexed entities not owned by the current client level");
+        check(distanceConfig[0],"supplement applies the configurable local distance limit");
+        check(collect[0]&&beforeDrawn[0],"supplement feeds the regular collector before the frame closes collection");
     }
     private static void hook(String owner,String method,String calledOwner,String called,String desc,int expected)throws Exception {
         int[] hits={0};readClass(owner,new ClassVisitor(Opcodes.ASM9){@Override public MethodVisitor visitMethod(int access,String name,String d,String signature,String[] exceptions){if(!name.equals(method))return null;return new MethodVisitor(Opcodes.ASM9){@Override public void visitMethodInsn(int opcode,String o,String n,String d,boolean iface){if(o.equals(calledOwner)&&n.equals(called)&&d.equals(desc))hits[0]++;}};}});

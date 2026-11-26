@@ -1,5 +1,17 @@
 # skyboxblock — Minecraft 26.2
 
+## 渲染距离与缺面兜底（2026-11-26）
+
+```mcfunction
+/skyboxcustom renderdistance            # 查询
+/skyboxcustom renderdistance set 512    # 16..4096
+/skyboxcustom renderdistance reset      # 恢复 256
+```
+
+默认 **256** 格、上限 **4096** 格，只影响本机；也可用 `-Dskyboxblock.skyboxRenderDistance=512`。服务器权威天空设置不会锁住本机距离，改完无需重启。
+
+遮挡后快速显露时可能短暂缺面：本版在不透明绘制前遍历本模组维护的已加载天空盒实体索引补收漏掉的方块，不依赖原版可见区块列表，也不受 Sodium 接管方块实体提取的影响。详见[渲染距离与缺面复查](<../docs/RENDER-DISTANCE-2026-11-26.md>)。
+
 ## 天空盒性能与可见性（2026-11-22）
 
 26.2 与主线同步 `/skyboxblock env render_skybox <true|false>` 和 `/skyboxblock player <目标> render_skybox <true|false>`，均使用原版布尔参数。默认显示，关闭仅使天空盒方块在世界中不可见，不影响碰撞。无光影/DH 合成需求时跳过两次透明缓冲复制；符合相同投影和尺寸的视图可复用天空画布。构建下载及 Iris 光影回归见 [性能与可见性报告](<../docs/SKYBOX-PERFORMANCE-2026-11-22.md>)。

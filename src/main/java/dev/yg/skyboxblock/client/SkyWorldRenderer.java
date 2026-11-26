@@ -336,6 +336,20 @@ public final class SkyWorldRenderer {
             MESH.draw(instance,batch.vertices,batch.count,false);
         }
     }
+    /** Loaded sky windows whose renderer list skipped them this frame; normal frames pay one set walk. */
+    private static void collectSkippedSkyBlocks(Frame frame) {
+        int distance=SkyboxConfig.get().skyboxRenderDistance();
+        double limit=(double)distance*distance;
+        for(SkyBlockEntity block:SkyBlockEntity.loaded()) {
+            var pos=block.getBlockPos();
+            if(frame.seen.contains(pos.asLong())) continue;
+            double x=pos.getX()+.5-frame.camera.x;
+            double y=pos.getY()+.5-frame.camera.y;
+            double z=pos.getZ()+.5-frame.camera.z;
+            if(x*x+y*y+z*z>=limit) continue;
+            collect(block);
+        }
+    }
     public static void collect(SkyBlockEntity block) {
         Frame frame=current();
         BlockCollectionDiagnostics.collect(frame,block);
@@ -369,6 +383,7 @@ public final class SkyWorldRenderer {
     public static void drawOpaque() {
         Frame frame=current();
         if (frame==null || frame.drawn || frame.shadow || frame.level==null) return;
+        if (frame.renderSkybox) collectSkippedSkyBlocks(frame);
         frame.drawn=true;
         if(frame.root && frame.floatCount==0) SkyTemporalEdgeMask.idle();
         BlockCollectionDiagnostics.opaque(frame);

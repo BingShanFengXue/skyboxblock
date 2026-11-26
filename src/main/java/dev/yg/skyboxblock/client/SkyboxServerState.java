@@ -42,6 +42,7 @@ public final class SkyboxServerState {
         lastRevision = -1L;
         enforced = true;
         SkyVanillaClouds.invalidate();
+        SkyboxConfig.invalidateCache();
     }
 
     private static synchronized void end(Object handler) {
@@ -52,6 +53,7 @@ public final class SkyboxServerState {
         lastRevision = -1L;
         enforced = false;
         SkyVanillaClouds.invalidate();
+        SkyboxConfig.invalidateCache();
     }
 
     public static synchronized void register() {

@@ -18,6 +18,11 @@ public final class SkyboxConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger("skyboxblock");
     private static SkyboxConfig instance;
     private final boolean clouds, debug, simulatedLocalWeather;
+    public static final int DEFAULT_SKYBOX_RENDER_DISTANCE=256;
+    public static final int MIN_SKYBOX_RENDER_DISTANCE=16;
+    public static final int MAX_SKYBOX_RENDER_DISTANCE=4096;
+    private static final String SKYBOX_RENDER_DISTANCE_KEY="skyboxRenderDistance";
+    private final int skyboxRenderDistance;
     private float vanillaCloudHeight = SkyRenderMath.VANILLA_CLOUD_HEIGHT;
     public static final float MIN_CLOUD_HEIGHT=-32768F, MAX_CLOUD_HEIGHT=32768F;
     public static final float DEFAULT_CLOUD_FADE_START=128F, DEFAULT_CLOUD_FADE_END=384F;
@@ -28,9 +33,11 @@ public final class SkyboxConfig {
     private SkyEnvironment environment = SkyEnvironment.EMPTY;
     private SkyTimeClock.Setting skyTime=SkyTimeClock.Setting.AUTO;
     private SkyboxConfig(boolean clouds,boolean debug,boolean simulatedLocalWeather,
-                         java.util.Set<String> localTimeDimensions,java.util.Set<String> simulatedTimeDimensions) {
+                         java.util.Set<String> localTimeDimensions,java.util.Set<String> simulatedTimeDimensions,
+                         int skyboxRenderDistance) {
         this.clouds=clouds; this.debug=debug; this.simulatedLocalWeather=simulatedLocalWeather;
         this.localTimeDimensions=localTimeDimensions; this.simulatedTimeDimensions=simulatedTimeDimensions;
+        this.skyboxRenderDistance=skyboxRenderDistance;
     }
     /** Test-only override of the config file (null = the real instance config directory). */
     private static java.nio.file.Path testFile;
@@ -50,30 +57,39 @@ public final class SkyboxConfig {
     }
     public static SkyboxConfig get() {
         if (instance == null) {
+            Properties properties=readProperties();
+            int renderDistance=parseSkyboxRenderDistance(option(properties,SKYBOX_RENDER_DISTANCE_KEY,
+                    Integer.toString(DEFAULT_SKYBOX_RENDER_DISTANCE)));
             if(SkyboxServerState.enforced()) {
-                instance=new SkyboxConfig(true,Boolean.getBoolean("skyboxblock.debug"),false,java.util.Set.of(),java.util.Set.of());
+                instance=new SkyboxConfig(true,Boolean.getBoolean("skyboxblock.debug"),false,
+                        java.util.Set.of(),java.util.Set.of(),renderDistance);
                 return instance;
-            }
-            Properties properties = new Properties();
-            var file = configFile();
-            if (Files.exists(file)) {
-                try (var stream = Files.newInputStream(file)) { properties.load(stream); }
-                catch (IOException | IllegalArgumentException exception) {
-                    // A malformed Unicode escape makes Properties.load throw IllegalArgumentException
-                    // after partially loading; drop everything so no half-read value survives.
-                    properties.clear();
-                    LOGGER.warn("[skyboxblock] config read failed; using defaults", exception);
-                }
             }
             instance = fromProperties(properties);
         }
         return instance;
     }
+    private static Properties readProperties() {
+        Properties properties = new Properties();
+        var file = configFile();
+        if (Files.exists(file)) {
+            try (var stream = Files.newInputStream(file)) { properties.load(stream); }
+            catch (IOException | IllegalArgumentException exception) {
+                // A malformed Unicode escape makes Properties.load throw IllegalArgumentException
+                // after partially loading; drop everything so no half-read value survives.
+                properties.clear();
+                LOGGER.warn("[skyboxblock] config read failed; using defaults", exception);
+            }
+        }
+        return properties;
+    }
     static SkyboxConfig fromProperties(Properties file) {
         SkyboxConfig config=new SkyboxConfig(Boolean.parseBoolean(option(file,"clouds","true")),
                 Boolean.parseBoolean(option(file,"debug","false")),
                 option(file,"simulatedWeather","clear").equalsIgnoreCase("local"),
-                dimensions(option(file,"localTimeDimensions","")),dimensions(option(file,"simulatedTimeDimensions","")));
+                dimensions(option(file,"localTimeDimensions","")),dimensions(option(file,"simulatedTimeDimensions","")),
+                parseSkyboxRenderDistance(option(file,SKYBOX_RENDER_DISTANCE_KEY,
+                        Integer.toString(DEFAULT_SKYBOX_RENDER_DISTANCE))));
         config.vanillaCloudHeight=parseCloudHeight(option(file,"vanillaCloudHeight","192"));
         config.vanillaCloudFadeEnd=parseCloudDistance(option(file,"vanillaCloudFadeEnd","384"));
         config.vanillaCloudFadeStart=parseCloudFadeStart(option(file,"vanillaCloudFadeStart","128"),config.vanillaCloudFadeEnd);
@@ -222,6 +238,8 @@ public final class SkyboxConfig {
         return attribute;
     }
     public static void reload() { instance=null; get(); SkyVanillaClouds.invalidate(); }
+    /** Drops the cached snapshot; the next {@link #get()} re-reads the local file (connection scope changes). */
+    public static void invalidateCache() { instance=null; }
     /**
      * Re-reads the on-disk file for environment attributes only: the fresh snapshot is live on the
      * next {@link #environment()} call, without invalidating the vanilla cloud mesh.
@@ -246,13 +264,35 @@ public final class SkyboxConfig {
             properties.setProperty("vanillaCloudFadeEnd",Float.toString(end));
         });
     }
+    static int parseSkyboxRenderDistance(String text) {
+        if(text==null) return DEFAULT_SKYBOX_RENDER_DISTANCE;
+        try {
+            int value=Integer.parseInt(text.trim());
+            if(value>=MIN_SKYBOX_RENDER_DISTANCE && value<=MAX_SKYBOX_RENDER_DISTANCE) return value;
+        } catch(NumberFormatException ignored) { }
+        LOGGER.warn("[skyboxblock] invalid skyboxRenderDistance {}; using {}",text,DEFAULT_SKYBOX_RENDER_DISTANCE);
+        return DEFAULT_SKYBOX_RENDER_DISTANCE;
+    }
+    public int skyboxRenderDistance() { return skyboxRenderDistance; }
+    public static void setSkyboxRenderDistance(int distance) throws IOException {
+        if(distance<MIN_SKYBOX_RENDER_DISTANCE || distance>MAX_SKYBOX_RENDER_DISTANCE)
+            throw new IllegalArgumentException("Skybox render distance must be 16..4096 blocks");
+        update(properties -> properties.setProperty(SKYBOX_RENDER_DISTANCE_KEY,Integer.toString(distance)),false,true);
+    }
+    public static void resetSkyboxRenderDistance() throws IOException {
+        update(properties -> properties.remove(SKYBOX_RENDER_DISTANCE_KEY),false,true);
+    }
     /**
      * Read-modify-write of the property file, atomically. Writing is <em>fail-closed</em>: a file that
      * cannot be parsed is never rewritten or truncated — the parse failure is wrapped in
      * {@link IOException} so the caller reports it and the snapshot stays untouched.
      */
     private static void update(java.util.function.Consumer<Properties> mutation) throws IOException {
-        if(SkyboxServerState.enforced()) throw new IOException("天空盒配置由服务端管理，请使用 /skyboxblock env");
+        update(mutation,true,false);
+    }
+    private static void update(java.util.function.Consumer<Properties> mutation,boolean invalidateClouds,
+                               boolean localVisualSetting) throws IOException {
+        if(SkyboxServerState.enforced() && !localVisualSetting) throw new IOException("天空盒配置由服务端管理，请使用 /skyboxblock env");
         var file=configFile();
         Properties properties=new Properties();
         if (Files.exists(file)) {
@@ -275,7 +315,9 @@ public final class SkyboxConfig {
                 Files.move(pending,file,java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
         } finally { Files.deleteIfExists(pending); }
-        reload();
+        instance=null;
+        get();
+        if(invalidateClouds) SkyVanillaClouds.invalidate();
     }
     public boolean simulatedLocalWeather() { return SkyboxServerState.enforced() ? SkyboxServerState.get().simulatedLocalWeather() : simulatedLocalWeather; }
     public boolean clouds() { return SkyboxServerState.enforced() ? SkyboxServerState.get().clouds() : clouds; }

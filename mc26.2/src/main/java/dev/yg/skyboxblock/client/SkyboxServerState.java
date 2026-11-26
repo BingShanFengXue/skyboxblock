@@ -43,6 +43,7 @@ public final class SkyboxServerState {
         snapshot = SkyboxSettings.DEFAULT;
         lastRevision = -1L;
         enforced = true;
+        SkyboxConfig.invalidateCache();
     }
 
     private static synchronized void end(Object handler) {
@@ -52,6 +53,7 @@ public final class SkyboxServerState {
         snapshot = SkyboxSettings.DEFAULT;
         lastRevision = -1L;
         enforced = false;
+        SkyboxConfig.invalidateCache();
     }
 
     public static synchronized void register() {

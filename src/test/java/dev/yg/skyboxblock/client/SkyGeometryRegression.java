@@ -225,6 +225,38 @@ public final class SkyGeometryRegression {
         }
         require(SkyVanillaGeometry.disc(16).length==72,"native sky disc eight triangles");
         require(SkyVanillaGeometry.dawn(new float[]{1,.5F,.2F,.75F}).length==336,"native dawn sixteen triangles");
+        require(SkyboxConfig.DEFAULT_SKYBOX_RENDER_DISTANCE==256,"default sky-box render distance");
+        require(SkyboxConfig.MIN_SKYBOX_RENDER_DISTANCE==16 && SkyboxConfig.MAX_SKYBOX_RENDER_DISTANCE==4096,
+                "sky-box render distance bounds");
+        require(SkyboxConfig.parseSkyboxRenderDistance("16")==16,"lower distance bound accepted");
+        require(SkyboxConfig.parseSkyboxRenderDistance("4096")==4096,"upper distance bound accepted");
+        for(String bad:new String[]{"15","4097","abc","","  ","-1","NaN"})
+            require(SkyboxConfig.parseSkyboxRenderDistance(bad)==256,"invalid distance falls back: "+bad);
+        require(SkyboxConfig.parseSkyboxRenderDistance(null)==256,"null distance falls back");
+        Properties renderDistance=new Properties();
+        require(SkyboxConfig.fromProperties(renderDistance).skyboxRenderDistance()==256,"missing distance key uses default");
+        renderDistance.setProperty("skyboxRenderDistance","1024");
+        require(SkyboxConfig.fromProperties(renderDistance).skyboxRenderDistance()==1024,"distance property parsed");
+        String previousDistance=System.getProperty("skyboxblock.skyboxRenderDistance");
+        try {
+            System.setProperty("skyboxblock.skyboxRenderDistance","512");
+            require(SkyboxConfig.fromProperties(renderDistance).skyboxRenderDistance()==512,"JVM distance override wins");
+        } finally {
+            if(previousDistance==null) System.clearProperty("skyboxblock.skyboxRenderDistance");
+            else System.setProperty("skyboxblock.skyboxRenderDistance",previousDistance);
+        }
+        Path distanceDir=Files.createTempDirectory("skybox-distance-");
+        try {
+            SkyboxConfig.installTestFile(distanceDir.resolve("skyboxblock.properties"));
+            SkyboxConfig.setSkyboxRenderDistance(768);
+            require(SkyboxConfig.get().skyboxRenderDistance()==768,"distance setter applies immediately");
+            require(SkyboxConfig.testFileText().contains("skyboxRenderDistance=768"),"distance key persisted");
+            SkyboxConfig.resetSkyboxRenderDistance();
+            require(SkyboxConfig.get().skyboxRenderDistance()==256,"distance reset restores default");
+            require(!SkyboxConfig.testFileText().contains("skyboxRenderDistance"),"distance reset removes the key");
+        } finally {
+            SkyboxConfig.clearTestFile();
+        }
         String old=System.getProperty("skyboxblock.clouds");
         try { System.setProperty("skyboxblock.clouds","true"); require(SkyboxConfig.fromProperties(file).clouds(),"JVM option wins"); }
         finally { if(old==null)System.clearProperty("skyboxblock.clouds");else System.setProperty("skyboxblock.clouds",old); }
