@@ -38,6 +38,7 @@ public final class CustomSkyRegistry {
     private static final long MAX_FILE_BYTES = 64 * 1024;
     private static final int MAX_IMAGE_WIDTH = 4096;
     private static final int MAX_IMAGE_HEIGHT = 2048;
+    private static final BufferedImage NEUTRAL_PLACEHOLDER = createNeutralPlaceholder();
 
     /** One usable custom style: a registered block id plus where its panorama lives. */
     public record Style(String id, String picture, boolean creative, Map<String, String> names,
@@ -90,17 +91,19 @@ public final class CustomSkyRegistry {
             WARNINGS.add("无法列出目录 " + baseDir + ": " + error.getMessage());
         }
         Map<String, Style> byId = new LinkedHashMap<>();
+        configLoop:
         for (Path config : configs) {
             SkyConfigParser.Result result = readConfig(config);
             WARNINGS.addAll(result.warnings());
             WARNINGS.addAll(result.errors());
             if (!result.usable() || !result.enabled()) continue;
             for (SkyConfigParser.StyleSpec spec : result.styles()) {
-                if (!buildStyle(config.getFileName().toString(), spec, byId)) continue;
+                // Check before decoding/materialising the next style; the limit is global across files.
                 if (byId.size() >= MAX_STYLES) {
                     WARNINGS.add("风格数量超过上限 " + MAX_STYLES + "，其余已忽略");
-                    break;
+                    break configLoop;
                 }
+                buildStyle(config.getFileName().toString(), spec, byId);
             }
         }
         STYLES.addAll(byId.values());
@@ -129,11 +132,6 @@ public final class CustomSkyRegistry {
             return false;
         }
         Path picture = baseDir.resolve(spec.picture());
-        boolean htmlSource = HtmlPanoramaRenderer.isHtml(picture);
-        if (!Files.isRegularFile(picture) && !htmlSource) {
-            WARNINGS.add(fileName + ": 找不到图片 " + spec.picture() + "，已跳过 " + spec.id());
-            return false;
-        }
         ResourceLocation panorama;
         try {
             panorama = materialise(spec.id(), picture);
@@ -156,6 +154,13 @@ public final class CustomSkyRegistry {
         } catch (NullPointerException noLauncherInRegressionProcess) {
             return false;
         }
+    }
+
+    private static BufferedImage createNeutralPlaceholder() {
+        BufferedImage image = new BufferedImage(512, 256, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < image.getHeight(); y++)
+            for (int x = 0; x < image.getWidth(); x++) image.setRGB(x, y, 0xff808080);
+        return image;
     }
 
     /**
@@ -192,13 +197,19 @@ public final class CustomSkyRegistry {
                 }
             }
         } else {
-            PanoramaImageDecoder.Decoded decoded = PanoramaImageDecoder.decode(picture,
-                    MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT);
-            image = decoded.image();
-            if (decoded.exposure() != 1.0 || Double.isFinite(decoded.medianLuminance())) {
-                SkyboxBlockMod.LOGGER.info("[skyboxblock] {} {}: {}x{}, exposure={}, medianLuminance={}",
-                        decoded.format(), picture.getFileName(), image.getWidth(), image.getHeight(),
-                        decoded.exposure(), decoded.medianLuminance());
+            try {
+                PanoramaImageDecoder.Decoded decoded = PanoramaImageDecoder.decode(picture,
+                        MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT);
+                image = decoded.image();
+                if (decoded.exposure() != 1.0 || Double.isFinite(decoded.medianLuminance())) {
+                    SkyboxBlockMod.LOGGER.info("[skyboxblock] {} {}: {}x{}, exposure={}, medianLuminance={}",
+                            decoded.format(), picture.getFileName(), image.getWidth(), image.getHeight(),
+                            decoded.exposure(), decoded.medianLuminance());
+                }
+            } catch (IOException | RuntimeException error) {
+                WARNINGS.add("图片 " + picture.getFileName() + " 读取失败，已为 " + styleId
+                        + " 使用中性占位纹理：" + error.getMessage());
+                image = NEUTRAL_PLACEHOLDER;
             }
         }
         if (image.getWidth() > MAX_IMAGE_WIDTH || image.getHeight() > MAX_IMAGE_HEIGHT) {

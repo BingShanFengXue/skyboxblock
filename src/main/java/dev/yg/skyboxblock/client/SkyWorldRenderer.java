@@ -88,6 +88,8 @@ public final class SkyWorldRenderer {
         public int[] targetViewport=new int[4],viewport=new int[4];
         public double[] depthRange=new double[2];
         public int floatCount,finalResolveCount;
+        public int supplementColumnsVisited,supplementChunksVisited,supplementEntriesVisited;
+        public int supplementDistanceCandidates,supplementFrustumRejected,supplementFrustumAccepted;
         public boolean drawn,finalResolved,irisFinalHook;
         public boolean itrpMaterialWrites,itrpBackgroundInjected;
         public boolean exposureMeterCorrected,exposureMeterRestored;
@@ -336,19 +338,38 @@ public final class SkyWorldRenderer {
             MESH.draw(instance,batch.vertices,batch.count,false);
         }
     }
-    /** Loaded sky windows whose renderer list skipped them this frame; normal frames pay one set walk. */
+    /** Loaded sky windows missed by renderer lists; query only occupied chunk buckets near this view. */
     private static void collectSkippedSkyBlocks(Frame frame) {
         int distance=SkyboxConfig.get().skyboxRenderDistance();
         double limit=(double)distance*distance;
-        for(SkyBlockEntity block:SkyBlockEntity.loaded()) {
+        boolean allowSideCull = !frame.portal && !frame.mirrored && !ModCompat.irisActive();
+        org.joml.Matrix4f clipFromCamera = allowSideCull
+                ? new org.joml.Matrix4f(frame.projection).mul(frame.view) : null;
+        var query = SkyBlockEntity.loadedNear(frame.level,frame.camera.x,frame.camera.z,distance);
+        int distanceCandidates = 0, frustumRejected = 0, frustumAccepted = 0;
+        for(SkyBlockEntity block:query.entities()) {
             var pos=block.getBlockPos();
             if(frame.seen.contains(pos.asLong())) continue;
             double x=pos.getX()+.5-frame.camera.x;
             double y=pos.getY()+.5-frame.camera.y;
             double z=pos.getZ()+.5-frame.camera.z;
             if(x*x+y*y+z*z>=limit) continue;
+            distanceCandidates++;
+            if (SkyWindowCull.outsideSidePlanes(pos.getX(),pos.getY(),pos.getZ(),
+                    frame.camera.x,frame.camera.y,frame.camera.z,clipFromCamera)) {
+                frustumRejected++;
+                continue;
+            }
+            frustumAccepted++;
             collect(block);
         }
+        SkyRenderPerf.supplement(frame.root,query,distanceCandidates,frustumRejected,frustumAccepted);
+        frame.supplementColumnsVisited=query.occupiedColumnsVisited();
+        frame.supplementChunksVisited=query.occupiedChunksVisited();
+        frame.supplementEntriesVisited=query.indexedEntriesVisited();
+        frame.supplementDistanceCandidates=distanceCandidates;
+        frame.supplementFrustumRejected=frustumRejected;
+        frame.supplementFrustumAccepted=frustumAccepted;
     }
     public static void collect(SkyBlockEntity block) {
         Frame frame=current();
@@ -473,8 +494,10 @@ public final class SkyWorldRenderer {
             }
         } finally { if (frame.root) RenderRegression.afterPrivatePass(); }
         if (SkyboxConfig.get().debug() && debugFrames++%300==0)
-            SkyboxBlockMod.LOGGER.info("[skyboxblock] opaque sky: blocks={} vertices={} fbo={} portal={} view={} slot={}",
-                    frame.blocks(),frame.vertices(),frame.framebuffer,frame.portal,frame.viewId,frame.viewSlot);
+            SkyboxBlockMod.LOGGER.info("[skyboxblock] opaque sky: blocks={} vertices={} fbo={} portal={} view={} slot={} supplement(columns/chunks/entries/distance/frustum-out/in)={}/{}/{}/{}/{}/{}",
+                    frame.blocks(),frame.vertices(),frame.framebuffer,frame.portal,frame.viewId,frame.viewSlot,
+                    frame.supplementColumnsVisited,frame.supplementChunksVisited,frame.supplementEntriesVisited,
+                    frame.supplementDistanceCandidates,frame.supplementFrustumRejected,frame.supplementFrustumAccepted);
     }
     /** Consume this view's depth immediately after its real Iris final pass, before IP snapshots/reuses it. */
     private static void resolveView(Frame frame) {

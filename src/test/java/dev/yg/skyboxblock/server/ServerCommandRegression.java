@@ -158,6 +158,9 @@ public final class ServerCommandRegression {
                 "skyboxblock environment reload", "skyboxblock env reload",
                 "skyboxblock environment time", "skyboxblock environment time get"})
             require(succeeds(dispatcher, input, source), "route exists: " + input);
+        var playerTimeReset = dispatcher.parse("skyboxblock player @a time reset", source);
+        require(playerTimeReset.getExceptions().isEmpty() && !playerTimeReset.getReader().canRead(),
+                "per-player time reset route exists");
         // No invented nested root node.
         require(dispatcher.getRoot().getChild("skyboxblock").getChild("skyboxblock") == null,
                 "no nested skyboxblock root");
@@ -351,7 +354,8 @@ public final class ServerCommandRegression {
                 "skyboxblock env time set noon",
                 "skyboxblock env time lock",
                 "skyboxblock env time unlock",
-                "skyboxblock env time reset"}) {
+                "skyboxblock env time reset",
+                "skyboxblock player @a time reset"}) {
             Capture actor = player();
             CommandSourceStack source = player(actor);
             boolean rejected;

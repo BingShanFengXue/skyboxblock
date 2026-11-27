@@ -8,25 +8,29 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** No sky style or per-frame cached visibility survives block/neighbor changes. */
 public final class SkyBlockEntity extends BlockEntity {
-    /**
-     * Loaded sky windows, maintained across chunk load/unload. Renderer section lists can be stale or
-     * replaced (Sodium owns block-entity extraction in some setups), so the opaque pass uses this
-     * index as the authoritative fallback instead of trusting a single renderer's section list.
-     */
-    private static final java.util.Set<SkyBlockEntity> LOADED=java.util.Collections.synchronizedSet(
-            java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>()));
-    public static SkyBlockEntity[] loaded() {
-        synchronized(LOADED) { return LOADED.toArray(new SkyBlockEntity[0]); }
+    private static final SkyBlockSpatialIndex<SkyBlockEntity> LOADED = new SkyBlockSpatialIndex<>();
+    private transient SkyBlockSpatialIndex.Handle<SkyBlockEntity> loadedHandle;
+
+    /** Query only occupied chunk buckets within this view's horizontal render-distance square. */
+    public static SkyBlockSpatialIndex.Query<SkyBlockEntity> loadedNear(
+            net.minecraft.world.level.Level level, double cameraX, double cameraZ, int distance) {
+        return LOADED.query(level, cameraX, cameraZ, distance);
     }
     public SkyBlockEntity(BlockPos pos, BlockState state) { super(SkyboxBlockMod.SKY_BLOCK_ENTITY, pos, state); }
     @Override public void setLevel(net.minecraft.world.level.Level level) {
+        removeFromLoadedIndex();
         super.setLevel(level);
-        synchronized(LOADED) {
-            if(level!=null && level.isClientSide()) LOADED.add(this); else LOADED.remove(this);
+        if (level != null && level.isClientSide() && !isRemoved())
+            loadedHandle = LOADED.add(level, worldPosition.getX(), worldPosition.getZ(), this);
+    }
+    private void removeFromLoadedIndex() {
+        if (loadedHandle != null) {
+            LOADED.remove(loadedHandle);
+            loadedHandle = null;
         }
     }
     @Override public void setRemoved() {
-        synchronized(LOADED) { LOADED.remove(this); }
+        removeFromLoadedIndex();
         super.setRemoved();
     }
 

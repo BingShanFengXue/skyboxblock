@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallbac
 public final class SkyboxBlockClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
         BlockEntityRendererRegistry.register(SkyboxBlockMod.SKY_BLOCK_ENTITY, SkyBlockEntityRenderer::new);
+        SkyboxRegistryManifestClient.register();
         SkyboxServerState.register();
         SkyboxRenderToggle.register();
         CustomSkyCommand.register();

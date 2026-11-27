@@ -233,13 +233,10 @@ public final class SkyboxServerCommands {
         var store = store(source);
         for (var player : players) {
             try {
-                store.resetPlayerEnvironment(player.getUUID(), "skybox.time");
+                store.resetPlayerTime(player.getUUID());
             } catch (IOException error) {
                 return failure(source, localized("command.skyboxblock.server.player.time.failed",
                         "写入玩家天空时间失败：%s", message(error)));
-            } catch (IllegalArgumentException notAnEnvironmentAttribute) {
-                return failure(source, localized("command.skyboxblock.server.player.time.unsupported",
-                        "该版本暂不支持按玩家重置时间，请用 reset all"));
             }
         }
         return success(source, localized("command.skyboxblock.server.player.time.reset_done",
