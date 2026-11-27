@@ -35,6 +35,12 @@ public final class SkyboxServerBackendRegression {
             failures(root.resolve("failure.properties"), root);
             clockPersistence(root.resolve("clock.properties"));
             playerScope(root.resolve("players.properties"));
+            playerCommitFailure(root.resolve("player-transaction.properties"));
+            playerSendRevisionSequence(root.resolve("player-send-revisions.properties"));
+            playerGlobalSnapshot(root.resolve("player-global-snapshot.properties"));
+            dev.yg.skyboxblock.client.SkyboxRenderToggleRegression.run();
+            dev.yg.skyboxblock.network.SkyboxRegistryManifestRegression.run();
+            dev.yg.skyboxblock.network.SkyboxRenderToggleRequestGateRegression.run();
             codec();
             SkyboxServerConfig.clearTestFile();
             throwsType(IllegalStateException.class, () -> SkyboxServerConfig.forSource(null), "missing server without test hook");
@@ -284,10 +290,22 @@ public final class SkyboxServerBackendRegression {
         check(merged(store, bob, "star_brightness").equals("0.5"), "other player keeps the global value");
         check(merged(store, alice, "sky_color").equals(merged(store, bob, "sky_color")),
                 "unoverridden attribute still follows global");
+        store.setTime(12000, 90);
         store.setPlayerTime(alice, 6000, 100);
         check(store.settingsFor(alice).clock().ticks() == 6000, "player clock override applies");
         check(store.settingsFor(bob).clock().ticks() != 6000 || store.settings().clock().ticks() != 6000,
                 "player clock stays local");
+        store.resetPlayerTime(alice);
+        check(store.settingsFor(alice).clock().equals(store.settings().clock())
+                        && store.settingsFor(alice).clockAnchor() == store.settings().clockAnchor(),
+                "player time reset falls back to the global clock");
+        check(store.hasOverride(alice) && merged(store, alice, "star_brightness").equals("0.2"),
+                "player time reset preserves unrelated attribute overrides");
+        Properties playerFile = read(file.resolveSibling("skyboxblock-players.properties"));
+        String prefix = "player." + alice + ".";
+        check(!playerFile.containsKey(prefix + "skyTimeMode") && !playerFile.containsKey(prefix + "skyTimeTicks")
+                        && !playerFile.containsKey(prefix + "skyTimeAnchor"),
+                "player time reset removes all three clock keys");
         // The client drops any snapshot whose revision is not greater than the last accepted one,
         // so every transmitted snapshot must carry a fresh revision or per-player changes vanish.
         long first = store.forSend(alice).revision();
@@ -319,6 +337,76 @@ public final class SkyboxServerBackendRegression {
         store.resetEnvironment("render_skybox");
         check(store.forSend(alice).environment().rendersSkybox() && store.forSend(bob).environment().rendersSkybox(), "global reset shows skyboxes by default");
         check(merged(store, alice, "star_brightness").equals("0.5"), "reset all falls back to global");
+    }
+
+    private static void playerCommitFailure(Path file) throws Exception {
+        java.util.UUID alice = java.util.UUID.fromString("00000000-0000-0000-0000-00000000a11c");
+        java.util.UUID bob = java.util.UUID.fromString("00000000-0000-0000-0000-00000000b0b0");
+        var store = store(file);
+        store.setPlayerEnvironment(alice, "star_brightness", "0.25");
+        Path players = file.resolveSibling("skyboxblock-players.properties");
+        Files.delete(players);
+        Files.createDirectory(players);
+        Path blocker = players.resolve("occupied");
+        Files.writeString(blocker, "force atomic replacement failure", StandardCharsets.UTF_8);
+        throwsType(IOException.class, () -> store.setPlayerEnvironment(alice, "star_brightness", "0.75"),
+                "player override persist failure is reported");
+        check(store.hasOverride(alice) && merged(store, alice, "star_brightness").equals("0.25"),
+                "failed player commit leaves the old live override intact");
+        Files.delete(blocker);
+        Files.delete(players);
+        store.setPlayerEnvironment(bob, "star_brightness", "0.9");
+        check(merged(store, alice, "star_brightness").equals("0.25")
+                        && merged(store, bob, "star_brightness").equals("0.9"),
+                "later successful player commit does not carry failed mutation");
+        var restarted = store(file);
+        check(merged(restarted, alice, "star_brightness").equals("0.25")
+                        && merged(restarted, bob, "star_brightness").equals("0.9"),
+                "atomic player override file preserves committed snapshots after restart");
+    }
+
+    private static void playerSendRevisionSequence(Path file) throws Exception {
+        var store = store(file);
+        store.setEnvironment("star_brightness", "0.25");
+        store.setEnvironment("sky_color", "#010203");
+        check(store.settings().revision() == 2, "two empty-server commits advance persisted revision to two");
+        java.util.UUID alice = java.util.UUID.fromString("00000000-0000-0000-0000-00000000a11c");
+        long joinRevision = store.forSend(alice).revision();
+        store.setPlayerEnvironment(alice, "render_skybox", "false");
+        long playerRevision = store.forSend(alice).revision();
+        check(joinRevision == 2L && playerRevision > joinRevision,
+                "first player mutation after join receives a strictly newer snapshot revision");
+        check(SkyboxServerConfig.Store.nextSendRevision(Long.MAX_VALUE - 1L, 0L) == Long.MAX_VALUE,
+                "send revision can use Long.MAX_VALUE once without wrapping");
+        throwsType(IllegalStateException.class,
+                () -> SkyboxServerConfig.Store.nextSendRevision(Long.MAX_VALUE, 0L),
+                "exhausted send revision fails closed");
+        throwsType(IllegalArgumentException.class,
+                () -> SkyboxServerConfig.Store.nextSendRevision(-1L, 0L),
+                "negative send revision is rejected");
+    }
+
+    private static void playerGlobalSnapshot(Path file) throws Exception {
+        // Fixtures share one directory, and the store shares a sibling override-file name.
+        Files.deleteIfExists(file.resolveSibling("skyboxblock-players.properties"));
+        java.util.UUID alice = java.util.UUID.fromString("00000000-0000-0000-0000-00000000a11c");
+        java.util.UUID bob = java.util.UUID.fromString("00000000-0000-0000-0000-00000000b0b0");
+        var store = store(file);
+        store.setEnvironment("star_brightness", "0.5");
+        store.setPlayerEnvironment(alice, "render_skybox", "false");
+        Properties external = read(file);
+        external.setProperty("environment.visual/star_brightness", "0.75");
+        write(file, external);
+        check(merged(store, bob, "star_brightness").equals("0.5")
+                        && merged(store, alice, "star_brightness").equals("0.5"),
+                "unreloaded external global edit does not split player effective snapshots");
+        store.reload();
+        check(merged(store, bob, "star_brightness").equals("0.75")
+                        && merged(store, alice, "star_brightness").equals("0.75"),
+                "reload publishes one updated global snapshot for all players");
+        check(!store.settingsFor(alice).environment().rendersSkybox()
+                        && store.settingsFor(bob).environment().rendersSkybox(),
+                "reload keeps the player's independent visibility override");
     }
 
     private static String merged(SkyboxServerConfig.Store store, java.util.UUID player, String attribute) {

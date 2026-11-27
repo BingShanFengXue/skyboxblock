@@ -79,5 +79,11 @@ public final class SkyboxServerState {
                 }
             });
         });
+        ClientPlayNetworking.registerGlobalReceiver(
+                dev.yg.skyboxblock.network.SkyboxRenderToggleResultPayload.TYPE, (payload, context) -> {
+                    Object sender = context.player().connection;
+                    var client = context.client();
+                    client.execute(() -> SkyboxRenderToggle.receiveResult(payload, sender, client));
+                });
     }
 }

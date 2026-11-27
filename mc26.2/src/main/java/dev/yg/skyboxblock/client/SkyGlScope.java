@@ -27,7 +27,7 @@ final class SkyGlScope implements AutoCloseable {
     private final boolean depthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
     private final int frontFace = GL11.glGetInteger(GL11.GL_FRONT_FACE);
     private final int cullFace = GL11.glGetInteger(GL11.GL_CULL_FACE_MODE);
-    private final int count = Math.min(8, GL11.glGetInteger(GL20.GL_MAX_DRAW_BUFFERS));
+    private final int count = GL11.glGetInteger(GL20.GL_MAX_DRAW_BUFFERS);
     private final boolean[] blend = new boolean[count];
     private final int[][] factors = new int[count][6];
     private final boolean[][] masks = new boolean[count][4];

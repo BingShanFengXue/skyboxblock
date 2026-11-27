@@ -55,6 +55,20 @@ public final class SkyRenderPerf {
         c.visible[c.row] = enabled ? 1 : 0;
     }
 
+    static void supplement(boolean root, dev.yg.skyboxblock.SkyBlockSpatialIndex.Query<?> query,
+                           int distanceCandidates, int frustumRejected, int frustumAccepted) {
+        Capture c = active;
+        if (!ENABLED || c == null || !c.inFrame || !root) return;
+        int row = c.row;
+        c.indexColumns[row] = query.occupiedColumnsVisited();
+        c.indexChunks[row] = query.occupiedChunksVisited();
+        c.indexEntries[row] = query.indexedEntriesVisited();
+        c.emptyChunkLookups[row] = query.emptyChunkKeyLookups();
+        c.distanceCandidates[row] = distanceCandidates;
+        c.frustumRejected[row] = frustumRejected;
+        c.frustumAccepted[row] = frustumAccepted;
+    }
+
     static void copies(boolean root, long pixels) {
         Capture c = active;
         if (!ENABLED || c == null || !c.inFrame || !root) return;
@@ -100,7 +114,8 @@ public final class SkyRenderPerf {
     private static final class Capture {
         final int frames;
         final long[] interval, copyPixels;
-        final int[] faces, visible;
+        final int[] faces, visible, indexColumns, indexChunks, indexEntries, emptyChunkLookups;
+        final int[] distanceCandidates, frustumRejected, frustumAccepted;
         final long[][] cpu, gpu;
         final ArrayDeque<Pair> free = new ArrayDeque<>(), pending = new ArrayDeque<>();
         int row, tail;
@@ -110,6 +125,9 @@ public final class SkyRenderPerf {
             this.frames = frames;
             interval = new long[frames]; copyPixels = new long[frames];
             faces = new int[frames]; visible = new int[frames];
+            indexColumns = new int[frames]; indexChunks = new int[frames]; indexEntries = new int[frames];
+            emptyChunkLookups = new int[frames]; distanceCandidates = new int[frames];
+            frustumRejected = new int[frames]; frustumAccepted = new int[frames];
             java.util.Arrays.fill(faces, -1);
             java.util.Arrays.fill(visible, -1);
             cpu = new long[frames][STAGES.length]; gpu = new long[frames][STAGES.length];
@@ -135,12 +153,16 @@ public final class SkyRenderPerf {
         c.drain();
         for (Pair p : c.pending) p.delete();
         for (Pair p : c.free) p.delete();
-        StringBuilder text = new StringBuilder("frame,frame_interval_ns,faces,render_enabled,copy_pixels");
+        StringBuilder text = new StringBuilder("frame,frame_interval_ns,faces,render_enabled,copy_pixels,index_columns,index_chunks,index_entries,empty_chunk_lookups,distance_candidates,frustum_rejected,frustum_accepted");
         for (Stage stage : STAGES) text.append(',').append(stage).append("_CPU_ns,").append(stage).append("_GPU_ns");
         text.append('\n');
         for (int row = 0; row < c.frames; row++) {
             text.append(row).append(',').append(c.interval[row]).append(',').append(c.faces[row])
-                    .append(',').append(c.visible[row]).append(',').append(c.copyPixels[row]);
+                    .append(',').append(c.visible[row]).append(',').append(c.copyPixels[row])
+                    .append(',').append(c.indexColumns[row]).append(',').append(c.indexChunks[row])
+                    .append(',').append(c.indexEntries[row]).append(',').append(c.emptyChunkLookups[row])
+                    .append(',').append(c.distanceCandidates[row]).append(',').append(c.frustumRejected[row])
+                    .append(',').append(c.frustumAccepted[row]);
             for (int i = 0; i < STAGES.length; i++) {
                 text.append(',').append(c.cpu[row][i]).append(',');
                 if (c.gpu[row][i] != 0) text.append(c.gpu[row][i]);

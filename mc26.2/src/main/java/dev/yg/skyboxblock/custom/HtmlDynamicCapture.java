@@ -28,7 +28,18 @@ import java.util.stream.Stream;
 
 /** Persistent headless Chromium session that exposes throttled DevTools screencast frames. */
 public final class HtmlDynamicCapture implements AutoCloseable {
-    private static final int MAX_FRAME_BYTES = 16 * 1024 * 1024;
+    static final int MAX_FRAME_WIDTH = 4096;
+    static final int MAX_FRAME_HEIGHT = 2048;
+    static final int MAX_FRAME_RGBA_BYTES = Math.multiplyExact(
+            Math.multiplyExact(MAX_FRAME_WIDTH, MAX_FRAME_HEIGHT), 4);
+    // Permit PNG container/deflate overhead while bounding decoded RGBA to the supported image size.
+    private static final int MAX_PNG_OVERHEAD_BYTES = 1024 * 1024;
+    static final int MAX_FRAME_BYTES = Math.addExact(MAX_FRAME_RGBA_BYTES, MAX_PNG_OVERHEAD_BYTES);
+    static final int MAX_BASE64_FRAME_CHARS = Math.toIntExact(Math.multiplyExact(4L,
+            Math.floorDiv(Math.addExact((long) MAX_FRAME_BYTES, 2L), 3L)));
+    private static final int MAX_JSON_HEADER_CHARS = 64 * 1024;
+    static final int MAX_MESSAGE_CHARS = Math.addExact(MAX_BASE64_FRAME_CHARS, MAX_JSON_HEADER_CHARS);
+    private static final byte[] PNG_SIGNATURE = {(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10};
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5)).build();
 
@@ -53,7 +64,8 @@ public final class HtmlDynamicCapture implements AutoCloseable {
     private volatile boolean socketOpened;
     private volatile String lastEvent = "none";
     private volatile boolean canvasFallback;
-    private final StringBuilder messageBuffer = new StringBuilder();
+    private final Object messageLock = new Object();
+    private StringBuilder messageBuffer = new StringBuilder();
     private volatile boolean closed;
     private volatile Process process;
     private volatile WebSocket socket;
@@ -211,7 +223,7 @@ public final class HtmlDynamicCapture implements AutoCloseable {
         throw new IOException("Chromium page target did not appear within 15 seconds");
     }
 
-    private final class DevToolsListener implements WebSocket.Listener {
+    final class DevToolsListener implements WebSocket.Listener {
         @Override
         public void onOpen(WebSocket webSocket) {
             HtmlDynamicCapture.this.socket = webSocket;
@@ -239,11 +251,30 @@ public final class HtmlDynamicCapture implements AutoCloseable {
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             messagesReceived.incrementAndGet();
-            synchronized (messageBuffer) {
+            synchronized (messageLock) {
+                if (closed || failure.get() != null) {
+                    messageBuffer = new StringBuilder();
+                    webSocket.abort();
+                    return null;
+                }
+                final int fragmentChars;
+                final long aggregateChars;
+                try {
+                    fragmentChars = data.length();
+                    aggregateChars = Math.addExact((long) messageBuffer.length(), (long) fragmentChars);
+                } catch (RuntimeException invalidLength) {
+                    rejectMessage(webSocket, "invalid DevTools text-fragment length");
+                    return null;
+                }
+                if (fragmentChars > MAX_MESSAGE_CHARS || aggregateChars > MAX_MESSAGE_CHARS) {
+                    rejectMessage(webSocket, "DevTools text message exceeds " + MAX_MESSAGE_CHARS + " characters");
+                    return null;
+                }
                 messageBuffer.append(data);
                 if (last) {
                     String message = messageBuffer.toString();
-                    messageBuffer.setLength(0);
+                    // Do not retain a potentially multi-megabyte backing array between frames.
+                    messageBuffer = new StringBuilder();
                     handleMessage(webSocket, message);
                 }
             }
@@ -303,33 +334,90 @@ public final class HtmlDynamicCapture implements AutoCloseable {
             JsonObject params = root.getAsJsonObject("params");
             if (params == null || !params.has("data") || !params.has("sessionId")) return;
             String encoded = params.get("data").getAsString();
-            if (encoded.length() > (long) MAX_FRAME_BYTES * 4 / 3 + 16) {
-                throw new IllegalArgumentException("frame exceeds " + MAX_FRAME_BYTES + " bytes");
-            }
-            byte[] frame = Base64.getDecoder().decode(encoded);
-            if (frame.length > MAX_FRAME_BYTES) throw new IllegalArgumentException("frame is too large");
+            byte[] frame = decodeFrameData(encoded);
             framesReceived.incrementAndGet();
             latestFrame.set(frame);
             JsonObject ack = new JsonObject();
             ack.addProperty("sessionId", params.get("sessionId").getAsInt());
             sendCommand("Page.screencastFrameAck", ack);
         } catch (RuntimeException error) {
-            fail("Invalid DevTools screencast frame: " + error.getMessage());
-            webSocket.sendClose(1002, "invalid screencast frame");
+            rejectMessage(webSocket, "Invalid DevTools frame: " + error.getMessage());
         }
     }
 
     private void acceptFrameData(String raw) {
-        String encoded = raw;
-        int comma = encoded.indexOf(',');
-        if (encoded.startsWith("data:") && comma >= 0) encoded = encoded.substring(comma + 1);
-        if (encoded.length() > (long) MAX_FRAME_BYTES * 4 / 3 + 16) {
-            throw new IllegalArgumentException("frame exceeds " + MAX_FRAME_BYTES + " bytes");
-        }
-        byte[] frame = Base64.getDecoder().decode(encoded);
-        if (frame.length > MAX_FRAME_BYTES) throw new IllegalArgumentException("frame is too large");
+        byte[] frame = decodeFrameData(raw);
         framesReceived.incrementAndGet();
         latestFrame.set(frame);
+    }
+
+    private byte[] decodeFrameData(String raw) {
+        if (raw == null || raw.length() > MAX_MESSAGE_CHARS)
+            throw new IllegalArgumentException("frame response exceeds " + MAX_MESSAGE_CHARS + " characters");
+        String encoded = raw;
+        int comma = encoded.indexOf(',');
+        if (encoded.startsWith("data:")) {
+            if (comma < 0) throw new IllegalArgumentException("data URL has no payload separator");
+            encoded = encoded.substring(comma + 1);
+        }
+        if (encoded.length() > MAX_BASE64_FRAME_CHARS)
+            throw new IllegalArgumentException("base64 frame exceeds " + MAX_BASE64_FRAME_CHARS + " characters");
+        byte[] frame = Base64.getDecoder().decode(encoded);
+        if (frame.length > MAX_FRAME_BYTES) throw new IllegalArgumentException("encoded frame is too large");
+        try {
+            validatePngFrame(frame, width, height);
+        } catch (IOException invalidFrame) {
+            throw new IllegalArgumentException("frame rejected before image decode: " + invalidFrame.getMessage(), invalidFrame);
+        }
+        return frame;
+    }
+
+    /** Validates PNG signature and IHDR dimensions without allocating decoded pixels. */
+    public static void validatePngFrame(byte[] png, int expectedWidth, int expectedHeight) throws IOException {
+        if (png == null || png.length < 33) throw new IOException("PNG frame is truncated before IHDR");
+        if (png.length > MAX_FRAME_BYTES) throw new IOException("PNG frame exceeds the encoded byte budget");
+        for (int i = 0; i < PNG_SIGNATURE.length; i++) {
+            if (png[i] != PNG_SIGNATURE[i]) throw new IOException("live frame is not a PNG image");
+        }
+        if (readPngU32(png, 8) != 13L || png[12] != 'I' || png[13] != 'H'
+                || png[14] != 'D' || png[15] != 'R') {
+            throw new IOException("PNG frame has no leading IHDR chunk");
+        }
+        long imageWidth = readPngU32(png, 16);
+        long imageHeight = readPngU32(png, 20);
+        if (imageWidth == 0 || imageHeight == 0
+                || imageWidth > MAX_FRAME_WIDTH || imageHeight > MAX_FRAME_HEIGHT) {
+            throw new IOException("PNG frame dimensions exceed " + MAX_FRAME_WIDTH + "x" + MAX_FRAME_HEIGHT);
+        }
+        if (expectedWidth <= 0 || expectedHeight <= 0
+                || expectedWidth > MAX_FRAME_WIDTH || expectedHeight > MAX_FRAME_HEIGHT
+                || imageWidth != expectedWidth || imageHeight != expectedHeight) {
+            throw new IOException("PNG frame dimensions " + imageWidth + "x" + imageHeight
+                    + " do not match target " + expectedWidth + "x" + expectedHeight);
+        }
+        long rgbaBytes;
+        try {
+            rgbaBytes = Math.multiplyExact(Math.multiplyExact(imageWidth, imageHeight), 4L);
+        } catch (ArithmeticException overflow) {
+            throw new IOException("PNG frame RGBA byte count overflow", overflow);
+        }
+        if (rgbaBytes > MAX_FRAME_RGBA_BYTES) throw new IOException("PNG frame exceeds RGBA allocation budget");
+    }
+
+    private static long readPngU32(byte[] bytes, int offset) {
+        return ((long) (bytes[offset] & 0xff) << 24)
+                | ((long) (bytes[offset + 1] & 0xff) << 16)
+                | ((long) (bytes[offset + 2] & 0xff) << 8)
+                | (long) (bytes[offset + 3] & 0xff);
+    }
+
+    private void rejectMessage(WebSocket webSocket, String reason) {
+        synchronized (messageLock) {
+            messageBuffer = new StringBuilder();
+        }
+        latestFrame.set(null);
+        fail(reason);
+        webSocket.abort();
     }
 
     private void requestScreenshot() {

@@ -95,6 +95,8 @@ public final class SkyboxServerConfig {
         private final Path file;
         private final MinecraftServer server;
         private volatile SkyboxSettings settings = SkyboxSettings.DEFAULT;
+        /** Immutable-by-convention properties from the last successful load, commit or reload. */
+        private volatile Properties globalProperties = new Properties();
         /** Lazily loaded per-player overrides; null until first use. */
         private java.util.Map<java.util.UUID, Properties> overrides;
         /** Monotonic counter so every sent snapshot has a revision the client will accept. */
@@ -103,8 +105,11 @@ public final class SkyboxServerConfig {
         private Store(Path file, MinecraftServer server) {
             this.file = file.toAbsolutePath().normalize();
             this.server = server;
-            try { settings = parse(read(file), 0L); }
-            catch (IOException | IllegalArgumentException error) {
+            try {
+                Properties loaded = read(file);
+                settings = parse(loaded, 0L);
+                globalProperties = copyProperties(loaded);
+            } catch (IOException | IllegalArgumentException error) {
                 // Never retain partially parsed Properties or overwrite the damaged source.
                 LOGGER.warn("[skyboxblock] server config read failed; defaults remain active: {}", this.file, error);
             }
@@ -143,8 +148,10 @@ public final class SkyboxServerConfig {
         /** Strict reload: a damaged/invalid file never replaces the last good snapshot. */
         public synchronized void reload() throws IOException {
             SkyboxSettings next;
-            try { next = parse(read(file), nextRevision()); }
+            Properties loaded = read(file);
+            try { next = parse(loaded, nextRevision()); }
             catch (IllegalArgumentException error) { throw new IOException("天空盒服务器配置无效，保留原状态", error); }
+            globalProperties = copyProperties(loaded);
             settings = next;
             publish(next);
         }
@@ -197,6 +204,7 @@ public final class SkyboxServerConfig {
             try { next = parse(properties, nextRevision()); }
             catch (IllegalArgumentException error) { throw new IOException("天空盒服务器配置无效，未写入", error); }
             persist(file, properties);
+            globalProperties = copyProperties(properties);
             settings = next; // Only after successful atomic file replacement.
             publish(next);
         }
@@ -212,26 +220,38 @@ public final class SkyboxServerConfig {
         /** Snapshot prepared for transmission: this player's effective values with a rising revision. */
         public synchronized SkyboxSettings forSend(java.util.UUID player) {
             SkyboxSettings effective = settingsFor(player);
-            long revision = Math.max(effective.revision(), ++sendSequence);
+            long revision = nextSendRevision(sendSequence, effective.revision());
+            sendSequence = revision;
             return new SkyboxSettings(effective.environment(), effective.clouds(), effective.cloudHeight(),
                     effective.cloudFadeStart(), effective.cloudFadeEnd(), effective.simulatedLocalWeather(),
                     effective.localTimeDimensions(), effective.simulatedTimeDimensions(), effective.clock(),
                     effective.clockAnchor(), revision);
         }
 
+        /** Allocate one strictly increasing wire revision, independent of persisted settings revisions. */
+        static long nextSendRevision(long current, long minimum) {
+            if (current < 0L || minimum < 0L)
+                throw new IllegalArgumentException("server snapshot revisions must be non-negative");
+            if (current == Long.MAX_VALUE)
+                throw new IllegalStateException("server snapshot revision sequence exhausted");
+            return Math.max(current + 1L, minimum);
+        }
+
         // ---------------------------------------------------------------- per-player overrides
 
         /** Effective settings for one player: the global snapshot with that player's keys applied. */
-        public SkyboxSettings settingsFor(java.util.UUID player) { return settingsFor(player, settings); }
+        public synchronized SkyboxSettings settingsFor(java.util.UUID player) {
+            return settingsFor(player, settings);
+        }
 
-        private SkyboxSettings settingsFor(java.util.UUID player, SkyboxSettings global) {
+        private synchronized SkyboxSettings settingsFor(java.util.UUID player, SkyboxSettings global) {
             Properties overrides = playerOverrides().get(player);
             if (overrides == null || overrides.isEmpty()) return global;
+            Properties merged = copyProperties(globalProperties);
+            merged.putAll(overrides);
             try {
-                Properties merged = read(file);
-                merged.putAll(overrides);
                 return parse(merged, global.revision());
-            } catch (IOException | RuntimeException error) {
+            } catch (RuntimeException error) {
                 LOGGER.warn("[skyboxblock] player override for {} ignored", player, error);
                 return global;
             }
@@ -275,19 +295,39 @@ public final class SkyboxServerConfig {
             commitPlayer(player, Properties::clear);
         }
 
+        public synchronized void resetPlayerTime(java.util.UUID player) throws IOException {
+            commitPlayer(player, SkyboxServerConfig::removeClock);
+        }
+
         private synchronized void commitPlayer(java.util.UUID player, Consumer<Properties> mutation)
                 throws IOException {
-            Properties global = read(file);
-            java.util.Map<java.util.UUID, Properties> all = playerOverrides();
-            Properties properties = all.computeIfAbsent(player, ignored -> new Properties());
+            Properties global = copyProperties(globalProperties);
+            // Mutate a private deep copy. A validation or atomic-write failure must not leak into the
+            // live cache or be smuggled into a later player's successful transaction.
+            java.util.Map<java.util.UUID, Properties> candidate = copyPlayerOverrides(playerOverrides());
+            Properties properties = candidate.computeIfAbsent(player, ignored -> new Properties());
             mutation.accept(properties);
             Properties merged = new Properties();
             merged.putAll(global);
             merged.putAll(properties);
             try { parse(merged, settings.revision()); }
             catch (IllegalArgumentException error) { throw new IOException("玩家天空盒配置无效，未写入", error); }
-            persistPlayers();
+            persistPlayers(candidate);
+            overrides = candidate;
             publish(settings);
+        }
+
+        private static Properties copyProperties(Properties source) {
+            Properties copy = new Properties();
+            copy.putAll(source);
+            return copy;
+        }
+
+        private static java.util.Map<java.util.UUID, Properties> copyPlayerOverrides(
+                java.util.Map<java.util.UUID, Properties> source) {
+            var copy = new java.util.LinkedHashMap<java.util.UUID, Properties>();
+            source.forEach((player, current) -> copy.put(player, copyProperties(current)));
+            return copy;
         }
 
         /** Loads the override file once and caches it; writes always refresh the cache. */
@@ -317,9 +357,9 @@ public final class SkyboxServerConfig {
             return cached;
         }
 
-        private void persistPlayers() throws IOException {
+        private void persistPlayers(java.util.Map<java.util.UUID, Properties> snapshot) throws IOException {
             Properties flat = new Properties();
-            playerOverrides().forEach((id, properties) -> properties.forEach((key, value) ->
+            snapshot.forEach((id, properties) -> properties.forEach((key, value) ->
                     flat.setProperty("player." + id + "." + key, String.valueOf(value))));
             persist(playersFile(), flat);
         }

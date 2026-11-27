@@ -18,6 +18,7 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 public final class SkyboxBlockClient implements ClientModInitializer {
     @Override public void onInitializeClient() {
         BlockEntityRenderers.register(SkyboxBlockMod.SKY_BLOCK_ENTITY, context -> new SkyBlockEntityRenderer());
+        SkyboxRegistryManifestClient.register();
         SkyboxServerState.register();
         SkyboxRenderToggle.register();
         CustomSkyCommand.register();

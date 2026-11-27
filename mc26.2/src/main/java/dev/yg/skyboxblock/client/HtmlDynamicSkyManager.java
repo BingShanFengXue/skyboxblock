@@ -60,6 +60,11 @@ public final class HtmlDynamicSkyManager {
             if (now - page.lastUploadNanos < minimumFrameNanos) continue;
             byte[] png = page.capture.takeLatestFrame();
             if (png == null) continue;
+            String invalidFrame = invalidLiveFrameReason(png, page.width, page.height);
+            if (invalidFrame != null) {
+                failPage(client, page, invalidFrame);
+                continue;
+            }
             try {
                 NativeImage image = NativeImage.read(png);
                 if (image.getWidth() != page.width || image.getHeight() != page.height) {
@@ -87,6 +92,16 @@ public final class HtmlDynamicSkyManager {
             } catch (IOException | RuntimeException error) {
                 failPage(client, page, error.getClass().getSimpleName() + ": " + error.getMessage());
             }
+        }
+    }
+
+    /** Null accepts the frame; a reason routes it through failPage and restores the static texture. */
+    public static String invalidLiveFrameReason(byte[] png, int width, int height) {
+        try {
+            HtmlDynamicCapture.validatePngFrame(png, width, height);
+            return null;
+        } catch (IOException | RuntimeException invalid) {
+            return invalid.getMessage() == null ? invalid.getClass().getSimpleName() : invalid.getMessage();
         }
     }
 

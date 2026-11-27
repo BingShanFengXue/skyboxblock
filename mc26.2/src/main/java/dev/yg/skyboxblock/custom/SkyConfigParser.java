@@ -69,18 +69,27 @@ public final class SkyConfigParser {
         }
     }
 
-    /** 解析结果：errors 为空时 usable() 为真；enabled 是 enable 归一化后的布尔值。 */
+    /**
+     * 解析结果：errors 包含所有语义/文件诊断；fatalErrors 只包含整份配置必须跳过的错误。
+     * 单样式语义错误保留在 errors 中，但不会使 usable() 变为 false。
+     */
     public record Result(boolean enabled, List<StyleSpec> styles,
-                         List<String> warnings, List<String> errors) {
+                         List<String> warnings, List<String> errors, List<String> fatalErrors) {
+        /** 外部读取失败等文件级错误使用此便捷构造器。 */
+        public Result(boolean enabled, List<StyleSpec> styles, List<String> warnings, List<String> errors) {
+            this(enabled, styles, warnings, errors, errors);
+        }
+
         public Result {
             styles = styles == null ? List.of() : List.copyOf(styles);
             warnings = warnings == null ? List.of() : List.copyOf(warnings);
             errors = errors == null ? List.of() : List.copyOf(errors);
+            fatalErrors = fatalErrors == null ? List.of() : List.copyOf(fatalErrors);
         }
 
-        /** 没有错误才算可用；语法错误会让整份文件不可用。 */
+        /** 文件结构与 enable 有效时可用；errors 仍可能包含已隔离的样式级错误。 */
         public boolean usable() {
-            return errors.isEmpty();
+            return fatalErrors.isEmpty();
         }
     }
 
@@ -98,13 +107,15 @@ public final class SkyConfigParser {
         }
         List<String> warnings = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        List<String> fatalErrors = new ArrayList<>();
 
         Map<String, Node> top;
         try {
             top = new Lexer(file, source).readDocument();
         } catch (SyntaxError bad) {
             // 语法阶段一错到底：整份文件放弃，只带一条错误（此前攒下的警告保留，方便排查）
-            return new Result(false, List.of(), warnings, List.of(bad.getMessage()));
+            List<String> fatal = List.of(bad.getMessage());
+            return new Result(false, List.of(), warnings, fatal, fatal);
         }
 
         boolean enabled = false;
@@ -114,12 +125,16 @@ public final class SkyConfigParser {
             String key = entry.getKey();
             Node node = entry.getValue();
             if (!KEY.matcher(key).matches()) {
-                errors.add(msg(file, node.line(), "顶层键名 '" + key + "' 非法（只允许 A-Za-z0-9_-），已忽略"));
+                String error = msg(file, node.line(), "顶层键名 '" + key + "' 非法（只允许 A-Za-z0-9_-），已忽略");
+                errors.add(error);
+                fatalErrors.add(error);
                 continue;
             }
             if ("enable".equals(key)) {
                 if (node.isObject() || !node.isBool()) {
-                    errors.add(msg(file, node.line(), "enable 必须是布尔值（true/false/yes/no），已按 false 处理"));
+                    String error = msg(file, node.line(), "enable 必须是布尔值（true/false/yes/no），已按 false 处理");
+                    errors.add(error);
+                    fatalErrors.add(error);
                 } else {
                     enabled = Boolean.parseBoolean(node.text());
                 }
@@ -134,7 +149,7 @@ public final class SkyConfigParser {
                 styles.add(spec);
             }
         }
-        return new Result(enabled, styles, warnings, errors);
+        return new Result(enabled, styles, warnings, errors, fatalErrors);
     }
 
     /**

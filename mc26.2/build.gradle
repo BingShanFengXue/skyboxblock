@@ -236,7 +236,11 @@ tasks.register('htmlDynamicPanoramaTest', JavaExec) {
 }
 
 tasks.named('jar', Jar) {
-    from('LICENSES/OpenEXR.txt') { into 'META-INF/licenses/skyboxblock' }
+    from('LICENSE') { rename { "${it}_${project.base.archivesName.get()}" } }
+    from('../AUTHORS.md')
+    from('NOTICE')
+    from('THIRD_PARTY_NOTICES.md')
+    from('LICENSES') { into 'META-INF/licenses/skyboxblock' }
 }
 
 // 把编译 classpath 导出成文件：用于 javap / jar tf 直接审计 26.2 的真实 API 面。

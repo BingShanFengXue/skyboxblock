@@ -93,10 +93,11 @@ public final class SkyConfigRegression {
         return SkyConfigParser.parse(FILE, text);
     }
 
-    /** 一个坏块：必须不可用、必须跳过该块，且错误文案里出现指定片段。 */
+    /** 一个坏块：必须报告并跳过该块，但配置仍可继续注册其他有效样式。 */
     private static void badBlock(String name, String body, String needle) {
         SkyConfigParser.Result result = parse("sky = {\n" + body + "\n}");
-        check(!result.usable(), name + " → 必须报错");
+        check(result.usable(), name + " → 块级错误不废弃整份配置");
+        check(result.fatalErrors().isEmpty(), name + " → 不应产生文件级错误");
         check(result.styles().isEmpty(), name + " → 必须跳过该块");
         errorHas(name, result, needle);
     }
@@ -297,7 +298,8 @@ public final class SkyConfigRegression {
         SkyConfigParser.Result result = parse(lines(
                 "meta = { version = \"1\" }",
                 "sky = { id = \"skyboxblock:m\" picture = \"m.png\" }"));
-        check(!result.usable(), "顶层裸对象缺 id/picture 必须报错");
+        check(result.usable(), "顶层对象内缺 id/picture 是块级错误，不废弃整份配置");
+        check(result.fatalErrors().isEmpty(), "合法配置结构无 fatal error");
         eq(1, result.styles().size(), "合法块不受坏块影响");
         eq("skyboxblock:m", result.styles().get(0).id(), "合法块内容正确");
         errorHas("缺 id 报错", result, "缺少 id");
@@ -344,6 +346,7 @@ public final class SkyConfigRegression {
         SkyConfigParser.Result result = parse(lines(
                 "bad = { id = \"skyboxblock:bad\" picture = \"bad.gif\" }",
                 "good = { id = \"skyboxblock:good\" picture = \"good.png\" }"));
+        check(result.usable(), "坏块不使包含有效样式的配置失效");
         eq(1, result.styles().size(), "坏块只跳过自己");
         eq("skyboxblock:good", result.styles().get(0).id(), "好块照常返回");
         eq(1, result.errors().size(), "一个坏块只产生一条错误");
@@ -358,7 +361,7 @@ public final class SkyConfigRegression {
                 "    picture = \"l1.png\"",
                 "    lang_zh_cn = \"测试\"",
                 "}"));
-        check(!notObject.usable(), "lang 值不是对象 → 报错");
+        check(notObject.usable(), "lang 值错误只使该块失效");
         check(notObject.styles().isEmpty(), "lang 值不是对象 → 跳过该块");
         errorHas("lang 值不是对象", notObject, "必须是对象");
 
@@ -368,7 +371,7 @@ public final class SkyConfigRegression {
                 "    picture = \"l2.png\"",
                 "    lang_zh_cn = { name = \"甲\" desc = \"乙\" }",
                 "}"));
-        check(!extraField.usable(), "lang 块含未知键 → 报错");
+        check(extraField.usable(), "lang 块错误只使该块失效");
         errorHas("lang 块含未知键", extraField, "只允许 name");
 
         SkyConfigParser.Result emptyName = parse(lines(
@@ -416,6 +419,7 @@ public final class SkyConfigRegression {
                 "    id = \"skyboxblock:s1\"",
                 "    picture = \"s1.png\""));
         check(!unclosed.usable(), "缺 '}' → 不可用");
+        eq(1, unclosed.fatalErrors().size(), "结构错误属于文件级 fatal error");
         eq(1, unclosed.errors().size(), "结构错误只带一条错误");
         eq(0, unclosed.styles().size(), "结构错误返回空结果");
         check(!unclosed.enabled(), "结构错误 enabled=false");
@@ -479,8 +483,9 @@ public final class SkyConfigRegression {
         SkyConfigParser.Result top = parse(lines(
                 "天空 = \"甲\"",
                 "sky = { id = \"skyboxblock:k\" picture = \"k.png\" }"));
-        check(!top.usable(), "顶层中文键名非法 → 记错误");
-        eq(1, top.styles().size(), "非法键名只忽略该行，其他块保留");
+        check(!top.usable(), "顶层中文键名非法 → 整份配置不注册");
+        check(!top.fatalErrors().isEmpty(), "顶层键名错误属于 fatal error");
+        eq(1, top.styles().size(), "非法键名只忽略该行，其他块保留但注册器会丢弃整文件");
         errorHas("顶层中文键名文案", top, "非法");
 
         SkyConfigParser.Result inside = parse(lines(
@@ -489,7 +494,7 @@ public final class SkyConfigRegression {
                 "    picture = \"k2.png\"",
                 "    名字 = \"甲\"",
                 "}"));
-        check(!inside.usable(), "块内中文键名非法 → 报错");
+        check(inside.usable(), "块内中文键名非法只废掉该块");
         eq(0, inside.styles().size(), "块内非法键名废掉该块");
         errorHas("块内中文键名文案", inside, "键名");
     }
@@ -499,13 +504,15 @@ public final class SkyConfigRegression {
         SkyConfigParser.Result result = parse(lines(
                 "enable = \"true\"",
                 "sky = { id = \"skyboxblock:e\" picture = \"e.png\" }"));
-        check(!result.usable(), "enable 是非布尔 → 报错");
+        check(!result.usable(), "enable 是非布尔 → 整份文件跳过");
+        eq(1, result.fatalErrors().size(), "invalid enable 属于 fatal error");
         check(!result.enabled(), "enable 非法时按 false 处理");
         eq(1, result.styles().size(), "enable 非法不影响块解析");
         errorHas("enable 非布尔文案", result, "enable 必须是布尔值");
 
         SkyConfigParser.Result object = parse("enable = { a = \"b\" }\n");
-        check(!object.usable(), "enable 是对象 → 报错");
+        check(!object.usable(), "enable 是对象 → 整份文件跳过");
+        check(!object.fatalErrors().isEmpty(), "对象形式 enable 也属于 fatal error");
     }
 
     /** displayName 的整条回退链。 */

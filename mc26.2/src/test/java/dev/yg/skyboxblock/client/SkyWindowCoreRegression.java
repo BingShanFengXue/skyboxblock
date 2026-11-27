@@ -57,6 +57,9 @@ public final class SkyWindowCoreRegression {
         check(SkyboxConfig.parseSkyboxRenderDistance("4096")==4096,"configured distance accepts the upper bound");
         check(SkyboxConfig.parseSkyboxRenderDistance("15")==256,"configured distance rejects values below the lower bound");
         check(SkyboxConfig.parseSkyboxRenderDistance("4097")==256,"configured distance rejects values above the upper bound");
+        worldTargetValidation();
+        lateTransparencySnapshotValidation();
+        lateTransparencyHookOrder();
         suppressSupplementHook();
         for(double camera:new double[]{-20000000.13,-1000000.03,-.2,.123456,1000000.999,20000000.6}) {
             int base=(int)Math.floor(camera);
@@ -75,7 +78,95 @@ public final class SkyWindowCoreRegression {
             }
         });
         check(exactVertices[0]==3,"production face collection uses original double-before-float XYZ grid conversion");
-        System.out.println("SkyWindowCoreRegression: "+checks+" checks passed (inverse VP, bob, raster, panorama, exact 26.2 hooks)");
+        checks += SkyBlockSpatialIndexRegression.run();
+        System.out.println("SkyWindowCoreRegression: "+checks+" checks passed (inverse VP, bob, raster, panorama, exact 26.2 hooks, fail-soft framebuffer targets, partitioned fallback collection)");
+    }
+    private static void worldTargetValidation() {
+        check(SkyWindowRenderer.worldTargetStatus(false,-1,11,12,1920,1080)
+                        ==SkyWindowRenderer.WorldTargetStatus.READY_NATIVE,
+                "without Iris, a valid native world target remains enabled");
+        check(SkyWindowRenderer.worldTargetStatus(true,3,11,12,1920,1080)
+                        ==SkyWindowRenderer.WorldTargetStatus.READY_IRIS,
+                "valid Iris framebuffer and attachments are accepted");
+        check(SkyWindowRenderer.worldTargetStatus(true,0,0,0,0,0)
+                        ==SkyWindowRenderer.WorldTargetStatus.MISSING_FRAMEBUFFER,
+                "missing Iris framebuffer is classified as fail-soft");
+        check(SkyWindowRenderer.worldTargetStatus(true,3,0,12,1920,1080)
+                        ==SkyWindowRenderer.WorldTargetStatus.MISSING_ATTACHMENT,
+                "missing opaque color attachment is classified as fail-soft");
+        check(SkyWindowRenderer.worldTargetStatus(true,3,11,0,1920,1080)
+                        ==SkyWindowRenderer.WorldTargetStatus.MISSING_ATTACHMENT,
+                "missing opaque depth attachment is classified as fail-soft");
+        check(SkyWindowRenderer.worldTargetStatus(true,3,11,12,0,1080)
+                        ==SkyWindowRenderer.WorldTargetStatus.INVALID_DIMENSIONS,
+                "zero-sized opaque target is classified as fail-soft");
+        check(SkyWindowRenderer.worldTargetStatus(false,-1,11,12,1920,-1)
+                        ==SkyWindowRenderer.WorldTargetStatus.INVALID_DIMENSIONS,
+                "negative native target dimensions are rejected");
+    }
+    private static void lateTransparencySnapshotValidation() {
+        check(SkyWindowRenderer.lateTransparencySnapshotEligible(true,false,false,7,1920,1080,1920,1080),
+                "native/DH completed root color with exact view extent may refresh the after-transparency sample");
+        check(SkyWindowRenderer.lateTransparencySnapshotEligible(true,false,false,8,1280,720,1280,720),
+                "Iris final-stage color with exact view extent passes the same eligibility contract");
+        check(!SkyWindowRenderer.lateTransparencySnapshotEligible(false,false,false,7,1920,1080,1920,1080),
+                "portal/non-root views never reuse a root transparency snapshot");
+        check(!SkyWindowRenderer.lateTransparencySnapshotEligible(true,true,false,7,1920,1080,1920,1080),
+                "clipped portal views are excluded from late root-target capture");
+        check(!SkyWindowRenderer.lateTransparencySnapshotEligible(true,false,true,7,1920,1080,1920,1080),
+                "shadow views are excluded from late transparency capture");
+        check(!SkyWindowRenderer.lateTransparencySnapshotEligible(true,false,false,0,1920,1080,1920,1080),
+                "missing color texture leaves the earlier proven sample untouched");
+        check(!SkyWindowRenderer.lateTransparencySnapshotEligible(true,false,false,7,1280,720,1920,1080),
+                "different target dimensions are never copied into the current view sample");
+        check(!SkyWindowRenderer.lateTransparencySnapshotEligible(true,false,false,7,0,1080,1920,1080),
+                "invalid source extent is rejected without changing world-depth provenance");
+    }
+    private static void lateTransparencyHookOrder() throws Exception {
+        final int[] viewOrder={0,0};
+        final int[] viewInstruction={0};
+        readClass("dev/yg/skyboxblock/mixin/SkyLevelRenderMixin",new ClassVisitor(Opcodes.ASM9){
+            @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
+                if(!name.equals("skyboxblock$view"))return null;
+                return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        int instruction=++viewInstruction[0];
+                        if(owner.equals("com/llamalad7/mixinextras/injector/wrapoperation/Operation")&&method.equals("call"))viewOrder[0]=instruction;
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("endLevel"))viewOrder[1]=instruction;
+                    }
+                };
+            }
+        });
+        check(viewOrder[0]>0&&viewOrder[1]>viewOrder[0],
+                "native endLevel late snapshot runs only after the wrapped full LevelRenderer framegraph returns");
+
+        final boolean[] irisCaptureBeforeDepth={false},colorCopy={false},depthUntouched={true};
+        readClass("dev/yg/skyboxblock/client/SkyWindowRenderer",new ClassVisitor(Opcodes.ASM9){
+            @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
+                if(name.equals("beforeIrisFinal"))return new MethodVisitor(Opcodes.ASM9){
+                    int captureAt=-1,depthAt=-1,index;
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        index++;
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("captureLateTransparency"))captureAt=index;
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("copyDepth"))depthAt=index;
+                    }
+                    @Override public void visitEnd(){irisCaptureBeforeDepth[0]=captureAt>0&&depthAt>captureAt;}
+                };
+                if(name.equals("captureLateTransparency"))return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        if(owner.equals("org/lwjgl/opengl/GL11")&&method.equals("glCopyTexSubImage2D"))colorCopy[0]=true;
+                    }
+                    @Override public void visitFieldInsn(int op,String owner,String field,String d){
+                        if(op==Opcodes.PUTFIELD&&owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer$Frame")
+                                &&(field.equals("worldDepth")||field.equals("depthCopied")||field.equals("itrpOpaqueDepth")))depthUntouched[0]=false;
+                    }
+                };
+                return null;
+            }
+        });
+        check(irisCaptureBeforeDepth[0],"Iris final-stage snapshot is taken before the existing current-depth copy");
+        check(colorCopy[0],"late snapshot copies color only");
+        check(depthUntouched[0],"late snapshot does not alter world depth or material provenance");
     }
     private static void suppressSupplementHook()throws Exception {
         final boolean[] loadedIndex={false},liveOwnership={false},distanceConfig={false},collect={false},beforeDrawn={false};
@@ -83,7 +174,7 @@ public final class SkyWindowCoreRegression {
             @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
                 if(name.equals("collectSkippedSkyBlocks")) return new MethodVisitor(Opcodes.ASM9){
                     @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
-                        if(owner.equals("dev/yg/skyboxblock/SkyBlockEntity")&&method.equals("loaded"))loadedIndex[0]=true;
+                        if(owner.equals("dev/yg/skyboxblock/SkyBlockEntity")&&method.equals("loadedNear"))loadedIndex[0]=true;
                         if(owner.equals("net/minecraft/client/multiplayer/ClientLevel")&&method.equals("getBlockEntity"))liveOwnership[0]=true;
                         if(owner.equals("dev/yg/skyboxblock/client/SkyboxConfig")&&method.equals("skyboxRenderDistance"))distanceConfig[0]=true;
                         if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("collect"))collect[0]=true;
@@ -104,7 +195,7 @@ public final class SkyWindowCoreRegression {
                 return null;
             }
         });
-        check(loadedIndex[0],"supplement walks the loaded sky-window index instead of a renderer section list");
+        check(loadedIndex[0],"supplement queries occupied sky-window chunk buckets near this camera instead of walking every loaded window");
         check(liveOwnership[0],"supplement rejects indexed entities not owned by the current client level");
         check(distanceConfig[0],"supplement applies the configurable local distance limit");
         check(collect[0]&&beforeDrawn[0],"supplement feeds the regular collector before the frame closes collection");
