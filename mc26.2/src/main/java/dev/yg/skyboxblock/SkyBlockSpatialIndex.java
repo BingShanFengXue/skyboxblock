@@ -70,51 +70,63 @@ public final class SkyBlockSpatialIndex<T> {
         if (columns.isEmpty()) worlds.remove(world);
     }
 
-    /** Enumerate occupied chunk buckets within a camera-centered horizontal square. */
+    /** Work counters returned by a streaming range visit; no entity result collection is materialized. */
+    public record VisitStats(int occupiedColumnsVisited, int occupiedChunksVisited,
+                             int indexedEntriesVisited, int emptyChunkKeyLookups) { }
+
+    /** Compatibility snapshot query; render paths should use {@link #visitNear}. */
     public synchronized Query<T> query(Object world, double cameraX, double cameraZ, double radiusBlocks) {
-        if (world == null) return new Query<>(List.of(), 0, 0, 0, 0);
+        ArrayList<T> found = new ArrayList<>();
+        VisitStats stats = visitNear(world, cameraX, cameraZ, radiusBlocks, found::add);
+        return new Query<>(found, stats.occupiedColumnsVisited(), stats.occupiedChunksVisited(),
+                stats.indexedEntriesVisited(), stats.emptyChunkKeyLookups());
+    }
+
+    /**
+     * Visits live values in X-column, Z-chunk, then bucket-insertion order. Dead weak references and
+     * empty buckets are removed as encountered. The callback runs while this index is synchronized
+     * and must not mutate this same index.
+     */
+    public synchronized VisitStats visitNear(Object world, double cameraX, double cameraZ, double radiusBlocks,
+                                              java.util.function.Consumer<? super T> visitor) {
+        java.util.Objects.requireNonNull(visitor, "visitor");
+        if (world == null) return new VisitStats(0, 0, 0, 0);
         if (!Double.isFinite(cameraX) || !Double.isFinite(cameraZ)
                 || !Double.isFinite(radiusBlocks) || radiusBlocks < 0D) {
             throw new IllegalArgumentException("query center/radius must be finite and radius non-negative");
         }
         NavigableMap<Integer, NavigableMap<Integer, ArrayList<Handle<T>>>> columns = worlds.get(world);
-        if (columns == null || columns.isEmpty()) return new Query<>(List.of(), 0, 0, 0, 0);
+        if (columns == null || columns.isEmpty()) return new VisitStats(0, 0, 0, 0);
 
         int minX = chunkFloor(cameraX - radiusBlocks), maxX = chunkFloor(cameraX + radiusBlocks);
         int minZ = chunkFloor(cameraZ - radiusBlocks), maxZ = chunkFloor(cameraZ + radiusBlocks);
         NavigableMap<Integer, NavigableMap<Integer, ArrayList<Handle<T>>>> xRange =
                 columns.subMap(minX, true, maxX, true);
-        ArrayList<T> found = new ArrayList<>();
-        ArrayList<int[]> emptyBuckets = new ArrayList<>();
         int columnsVisited = 0, chunksVisited = 0, entriesVisited = 0;
-        for (Map.Entry<Integer, NavigableMap<Integer, ArrayList<Handle<T>>>> column : xRange.entrySet()) {
+        Iterator<Map.Entry<Integer, NavigableMap<Integer, ArrayList<Handle<T>>>>> columnIterator =
+                xRange.entrySet().iterator();
+        while (columnIterator.hasNext()) {
+            NavigableMap<Integer, ArrayList<Handle<T>>> column = columnIterator.next().getValue();
             columnsVisited++;
-            NavigableMap<Integer, ArrayList<Handle<T>>> zRange =
-                    column.getValue().subMap(minZ, true, maxZ, true);
-            for (Map.Entry<Integer, ArrayList<Handle<T>>> chunk : zRange.entrySet()) {
+            NavigableMap<Integer, ArrayList<Handle<T>>> zRange = column.subMap(minZ, true, maxZ, true);
+            Iterator<Map.Entry<Integer, ArrayList<Handle<T>>>> chunkIterator = zRange.entrySet().iterator();
+            while (chunkIterator.hasNext()) {
+                ArrayList<Handle<T>> bucket = chunkIterator.next().getValue();
                 chunksVisited++;
-                ArrayList<Handle<T>> bucket = chunk.getValue();
                 Iterator<Handle<T>> iterator = bucket.iterator();
                 while (iterator.hasNext()) {
                     Handle<T> handle = iterator.next();
                     entriesVisited++;
                     T value = handle.value.get();
                     if (value == null || handle.world.get() != world) iterator.remove();
-                    else found.add(value);
+                    else visitor.accept(value);
                 }
-                if (bucket.isEmpty()) emptyBuckets.add(new int[]{column.getKey(), chunk.getKey()});
+                if (bucket.isEmpty()) chunkIterator.remove();
             }
-        }
-        // Defer structural removals until range iterators have completed.
-        for (int[] empty : emptyBuckets) {
-            NavigableMap<Integer, ArrayList<Handle<T>>> chunks = columns.get(empty[0]);
-            if (chunks != null) {
-                chunks.remove(empty[1]);
-                if (chunks.isEmpty()) columns.remove(empty[0]);
-            }
+            if (column.isEmpty()) columnIterator.remove();
         }
         if (columns.isEmpty()) worlds.remove(world);
-        return new Query<>(found, columnsVisited, chunksVisited, entriesVisited, 0);
+        return new VisitStats(columnsVisited, chunksVisited, entriesVisited, 0);
     }
 
     private static int chunkFloor(double blockCoordinate) {

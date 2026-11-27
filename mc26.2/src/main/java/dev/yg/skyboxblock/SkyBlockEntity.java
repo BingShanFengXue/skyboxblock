@@ -16,6 +16,16 @@ public final class SkyBlockEntity extends BlockEntity {
             net.minecraft.world.level.Level level, double cameraX, double cameraZ, int distance) {
         return LOADED.query(level, cameraX, cameraZ, distance);
     }
+    /**
+     * Stream loaded entities while the index is locked; the visitor must not mutate this index.
+     * Render collectors only inspect block/world state and append to the current view; index membership
+     * changes exclusively in the block-entity lifecycle hooks above.
+     */
+    public static SkyBlockSpatialIndex.VisitStats loadedVisitNear(
+            net.minecraft.world.level.Level level, double cameraX, double cameraZ, int distance,
+            java.util.function.Consumer<? super SkyBlockEntity> visitor) {
+        return LOADED.visitNear(level, cameraX, cameraZ, distance, visitor);
+    }
     public SkyBlockEntity(BlockPos pos, BlockState state) { super(SkyboxBlockMod.SKY_BLOCK_ENTITY, pos, state); }
     @Override public void setLevel(net.minecraft.world.level.Level level) {
         removeFromLoadedIndex();

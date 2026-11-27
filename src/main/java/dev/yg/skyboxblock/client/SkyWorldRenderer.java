@@ -67,6 +67,7 @@ public final class SkyWorldRenderer {
         public final float partialTick;
         public final boolean portal,shadow,root,mirrored;
         final boolean renderSkybox;
+        final int renderDistance;
         private boolean usesVanillaCanvas;
         public final int viewSlot;
         public final long viewId,rootTransaction;
@@ -108,7 +109,9 @@ public final class SkyWorldRenderer {
         Frame(LevelRenderer renderer,Camera camera,Matrix4f view,Matrix4f projection,float partialTick) {
             this.renderer=renderer;
             level=((CloudMeshAccess)renderer).skyboxblock$getLevel();
-            renderSkybox=SkyboxConfig.get().environment().rendersSkybox();
+            var config=SkyboxConfig.get();
+            renderSkybox=config.environment().rendersSkybox();
+            renderDistance=config.skyboxRenderDistance();
             keepCombinedVertices=LEGACY_RENDER_PATH || CAPTURE_PATH || SeamScan.enabled()
                     || ModCompat.irisActive() || ModCompat.DISTANT_HORIZONS;
             if(keepCombinedVertices) vertices=new float[1024];
@@ -152,6 +155,10 @@ public final class SkyWorldRenderer {
     public static void setResolveShader(ShaderInstance instance) { resolveShader=instance; }
     public static Frame lastRoot() { return lastRoot; }
     public static Frame current() { return FRAMES.peek(); }
+    static int viewDistanceInView() {
+        Frame frame=current();
+        return frame==null ? SkyboxConfig.get().skyboxRenderDistance() : frame.renderDistance;
+    }
     static Frame activeGameFrame() { return GAME_VIEWS.isEmpty() ? current() : GAME_VIEWS.peek().frame; }
 
     /** Called by a try/finally WrapMethod: cancellation and cross-portal extra views cannot leak scopes. */
@@ -340,36 +347,35 @@ public final class SkyWorldRenderer {
     }
     /** Loaded sky windows missed by renderer lists; query only occupied chunk buckets near this view. */
     private static void collectSkippedSkyBlocks(Frame frame) {
-        int distance=SkyboxConfig.get().skyboxRenderDistance();
+        int distance=frame.renderDistance;
         double limit=(double)distance*distance;
         boolean allowSideCull = !frame.portal && !frame.mirrored && !ModCompat.irisActive();
         org.joml.Matrix4f clipFromCamera = allowSideCull
                 ? new org.joml.Matrix4f(frame.projection).mul(frame.view) : null;
-        var query = SkyBlockEntity.loadedNear(frame.level,frame.camera.x,frame.camera.z,distance);
-        int distanceCandidates = 0, frustumRejected = 0, frustumAccepted = 0;
-        for(SkyBlockEntity block:query.entities()) {
+        frame.supplementDistanceCandidates=0;
+        frame.supplementFrustumRejected=0;
+        frame.supplementFrustumAccepted=0;
+        var visit = SkyBlockEntity.loadedVisitNear(frame.level,frame.camera.x,frame.camera.z,distance,block -> {
             var pos=block.getBlockPos();
-            if(frame.seen.contains(pos.asLong())) continue;
+            if(frame.seen.contains(pos.asLong())) return;
             double x=pos.getX()+.5-frame.camera.x;
             double y=pos.getY()+.5-frame.camera.y;
             double z=pos.getZ()+.5-frame.camera.z;
-            if(x*x+y*y+z*z>=limit) continue;
-            distanceCandidates++;
+            if(x*x+y*y+z*z>=limit) return;
+            frame.supplementDistanceCandidates++;
             if (SkyWindowCull.outsideSidePlanes(pos.getX(),pos.getY(),pos.getZ(),
                     frame.camera.x,frame.camera.y,frame.camera.z,clipFromCamera)) {
-                frustumRejected++;
-                continue;
+                frame.supplementFrustumRejected++;
+                return;
             }
-            frustumAccepted++;
+            frame.supplementFrustumAccepted++;
             collect(block);
-        }
-        SkyRenderPerf.supplement(frame.root,query,distanceCandidates,frustumRejected,frustumAccepted);
-        frame.supplementColumnsVisited=query.occupiedColumnsVisited();
-        frame.supplementChunksVisited=query.occupiedChunksVisited();
-        frame.supplementEntriesVisited=query.indexedEntriesVisited();
-        frame.supplementDistanceCandidates=distanceCandidates;
-        frame.supplementFrustumRejected=frustumRejected;
-        frame.supplementFrustumAccepted=frustumAccepted;
+        });
+        SkyRenderPerf.supplement(frame.root,visit,frame.supplementDistanceCandidates,
+                frame.supplementFrustumRejected,frame.supplementFrustumAccepted);
+        frame.supplementColumnsVisited=visit.occupiedColumnsVisited();
+        frame.supplementChunksVisited=visit.occupiedChunksVisited();
+        frame.supplementEntriesVisited=visit.indexedEntriesVisited();
     }
     public static void collect(SkyBlockEntity block) {
         Frame frame=current();
@@ -404,7 +410,11 @@ public final class SkyWorldRenderer {
     public static void drawOpaque() {
         Frame frame=current();
         if (frame==null || frame.drawn || frame.shadow || frame.level==null) return;
-        if (frame.renderSkybox) collectSkippedSkyBlocks(frame);
+        if (frame.renderSkybox) {
+            try (var timing=SkyRenderPerf.cpuSpan(SkyRenderPerf.Stage.SUPPLEMENT,frame.root)) {
+                collectSkippedSkyBlocks(frame);
+            }
+        }
         frame.drawn=true;
         if(frame.root && frame.floatCount==0) SkyTemporalEdgeMask.idle();
         BlockCollectionDiagnostics.opaque(frame);

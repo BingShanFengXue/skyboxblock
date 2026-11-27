@@ -26,6 +26,24 @@ public final class SkyWindowRenderer {
     private static final boolean FIXTURE_CONTROL=!System.getProperty("skyboxblock.fixture.control", "").isBlank();
     private static final boolean FIXTURE_INPUTS=FIXTURE_CONTROL && !SkyRenderPerf.ENABLED;
     private static final int[] FACE_TRIANGLES={0,1,2,0,2,3};
+    // Four corners per face in the original submit order; one shared immutable-by-convention XYZ table.
+    private static final int FACE_UP=0,FACE_DOWN=1,FACE_NORTH=2,FACE_SOUTH=3,FACE_WEST=4,FACE_EAST=5;
+    private static final int FACE_CORNER_FLOATS=12;
+    static final int FACE_POSITION_FLOATS=FACE_TRIANGLES.length*3;
+    private static final float[] FACE_CORNERS={
+            // up
+            0,1,0, 0,1,1, 1,1,1, 1,1,0,
+            // down
+            0,0,1, 0,0,0, 1,0,0, 1,0,1,
+            // north
+            1,0,0, 0,0,0, 0,1,0, 1,1,0,
+            // south
+            0,0,1, 1,0,1, 1,1,1, 0,1,1,
+            // west
+            0,0,0, 0,0,1, 0,1,1, 0,1,0,
+            // east
+            1,0,1, 1,0,0, 1,1,0, 1,1,1
+    };
     private static final Identifier SUN=Identifier.withDefaultNamespace("textures/environment/celestial/sun.png");
     private static final SkyBlockEntityRenderer FADE_ENTITY_EXTRACTOR=new SkyBlockEntityRenderer();
     private static final ThreadLocal<SkyBoxRenderState> FADE_RENDER_STATE=ThreadLocal.withInitial(SkyBoxRenderState::new);
@@ -60,15 +78,41 @@ public final class SkyWindowRenderer {
         return iris ? WorldTargetStatus.READY_IRIS : WorldTargetStatus.READY_NATIVE;
     }
 
+    private static final class PositionBatch {
+        float[] data=new float[4096];
+        int count;
+        void face(net.minecraft.core.BlockPos block,Vec3 camera,int face) {
+            ensure(FACE_POSITION_FLOATS);
+            count=appendFacePositions(data,count,face,block.getX(),block.getY(),block.getZ(),camera.x,camera.y,camera.z);
+        }
+        private void ensure(int extra) {
+            if(count+extra>data.length)data=java.util.Arrays.copyOf(data,java.lang.Math.max(data.length*2,count+extra));
+        }
+    }
+    /** Four-corner template expands into the exact six-vertex triangle order used by both shaders. */
+    static int appendFacePositions(float[] destination,int offset,int face,int blockX,int blockY,int blockZ,
+                                   double cameraX,double cameraY,double cameraZ) {
+        int cornerBase=face*FACE_CORNER_FLOATS;
+        for(int vertex:FACE_TRIANGLES) {
+            int corner=cornerBase+vertex*3;
+            destination[offset++]=SkyRenderMath.relativeGridVertex(blockX,FACE_CORNERS[corner],cameraX);
+            destination[offset++]=SkyRenderMath.relativeGridVertex(blockY,FACE_CORNERS[corner+1],cameraY);
+            destination[offset++]=SkyRenderMath.relativeGridVertex(blockZ,FACE_CORNERS[corner+2],cameraZ);
+        }
+        return offset;
+    }
+    static int faceTriangleIndex(int vertex) { return FACE_TRIANGLES[vertex]; }
+
     private static final class Frame {
         final Matrix4f projection=new Matrix4f(),view=new Matrix4f(),rasterProjection=new Matrix4f(),inverse=new Matrix4f();
         final Vector2f scale=new Vector2f(1),jitter=new Vector2f();
-        final java.util.LinkedHashMap<SkySkin,SkyVanillaScene.Floats> batches=new java.util.LinkedHashMap<>();
+        final java.util.LinkedHashMap<SkySkin,PositionBatch> batches=new java.util.LinkedHashMap<>();
         final java.util.HashSet<Long> seen=new java.util.HashSet<>();
         final Vec3 camera;
         final SkySceneState sky;
         final float partialTick;
         final boolean shadow,renderSkybox;
+        final int renderDistance;
         final int slot;
         boolean lateResolve,usesVanillaCanvas;
         int faces;
@@ -85,7 +129,9 @@ public final class SkyWindowRenderer {
         Frame(LevelRenderState state,Matrix4fc view,float partial,int slot) {
             this.slot=slot;this.view.set(view);camera=state.cameraRenderState.pos;partialTick=partial;
             projection.set(projectionValid ? PROJECTION : state.cameraRenderState.projectionMatrix);
-            renderSkybox=SkyboxConfig.get().environment().rendersSkybox();
+            var config=SkyboxConfig.get();
+            renderSkybox=config.environment().rendersSkybox();
+            renderDistance=config.skyboxRenderDistance();
             shadow=ModCompat.irisShadowPass();sky=renderSkybox ? new SkySceneState(state,partial) : null;
         }
     }
@@ -127,6 +173,14 @@ public final class SkyWindowRenderer {
     }
     /** Receives the actual post-bob/post-hurt/post-nausea projection, not Camera's unmodified matrix. */
     public static Matrix4f captureProjection(Matrix4f projection) {PROJECTION.set(projection);projectionValid=true;return projection;}
+    static boolean renderSkyboxInView() {
+        Frame frame=FRAMES.peek();
+        return frame==null ? SkyboxConfig.get().environment().rendersSkybox() : frame.renderSkybox;
+    }
+    static int viewDistanceInView() {
+        Frame frame=FRAMES.peek();
+        return frame==null ? SkyboxConfig.get().skyboxRenderDistance() : frame.renderDistance;
+    }
     public static void beginLevel(LevelRenderState state,Matrix4fc view,float partial) {FRAMES.push(new Frame(state,view,partial,FRAMES.size()));}
     public static void endLevel() {
         Frame f=FRAMES.peek();if(f==null)return;
@@ -144,23 +198,14 @@ public final class SkyWindowRenderer {
         if(!f.seen.add(state.blockPos.asLong()))return;
         if(!(state.up||state.down||state.north||state.south||state.west||state.east))return;
         if(state.skin.texture()==null && state.skin.shaderMode()==0) f.usesVanillaCanvas=true;
-        SkyVanillaScene.Floats out=f.batches.computeIfAbsent(state.skin,k -> new SkyVanillaScene.Floats());
+        PositionBatch out=f.batches.computeIfAbsent(state.skin,k -> new PositionBatch());
         f.faces+=(state.up?1:0)+(state.down?1:0)+(state.north?1:0)+(state.south?1:0)+(state.west?1:0)+(state.east?1:0);
-        if(state.up)face(out,state.blockPos,f.camera,0,1,0,0,1,1,1,1,1,1,1,0);
-        if(state.down)face(out,state.blockPos,f.camera,0,0,1,0,0,0,1,0,0,1,0,1);
-        if(state.north)face(out,state.blockPos,f.camera,1,0,0,0,0,0,0,1,0,1,1,0);
-        if(state.south)face(out,state.blockPos,f.camera,0,0,1,1,0,1,1,1,1,0,1,1);
-        if(state.west)face(out,state.blockPos,f.camera,0,0,0,0,0,1,0,1,1,0,1,0);
-        if(state.east)face(out,state.blockPos,f.camera,1,0,1,1,0,0,1,1,0,1,1,1);
-    }
-    private static void face(SkyVanillaScene.Floats out,net.minecraft.core.BlockPos block,Vec3 camera,float... points) {
-        for(int i:FACE_TRIANGLES) {
-            // Match the 1.21.1 collector: add the grid corner in double precision BEFORE the
-            // single float conversion. Per-block float-pose addition gives shared edges different bits.
-            out.vertex(SkyRenderMath.relativeGridVertex(block.getX(),points[i*3],camera.x),
-                    SkyRenderMath.relativeGridVertex(block.getY(),points[i*3+1],camera.y),
-                    SkyRenderMath.relativeGridVertex(block.getZ(),points[i*3+2],camera.z),0,0,1,1,1,1);
-        }
+        if(state.up)out.face(state.blockPos,f.camera,FACE_UP);
+        if(state.down)out.face(state.blockPos,f.camera,FACE_DOWN);
+        if(state.north)out.face(state.blockPos,f.camera,FACE_NORTH);
+        if(state.south)out.face(state.blockPos,f.camera,FACE_SOUTH);
+        if(state.west)out.face(state.blockPos,f.camera,FACE_WEST);
+        if(state.east)out.face(state.blockPos,f.camera,FACE_EAST);
     }
     /** Immutable, borrowed-name snapshot for the meter only. Never exposes a mutable Frame/Gpu. */
     record MeterView(long token,boolean root,boolean portal,int slot,boolean shadow,
@@ -195,8 +240,10 @@ public final class SkyWindowRenderer {
     /** Invoked inside the actual framegraph main pass immediately AFTER executeSolid(). */
     public static void drawOpaque() {
         Frame f=FRAMES.peek();if(f==null||f.drawn||f.shadow)return;
+        if(f.renderSkybox)try(var timing=SkyRenderPerf.cpuSpan(SkyRenderPerf.Stage.SUPPLEMENT,f.root())) {
+            collectSkippedSkyBlocks(f);
+        }
         try(var timing=SkyRenderPerf.span(SkyRenderPerf.Stage.OPAQUE,f.root())) {
-            if(f.renderSkybox)collectSkippedSkyBlocks(f);
             f.drawn=true;
             if (!LEGACY_RENDER_PATH && !SkyRenderPerf.ENABLED && (!f.renderSkybox || f.batches.isEmpty())) return;
             SkyRenderPerf.view(f.root(),f.renderSkybox,f.faces);
@@ -208,34 +255,35 @@ public final class SkyWindowRenderer {
         if(!frame.root() || !frame.renderSkybox || frame.shadow) return;
         Minecraft mc=Minecraft.getInstance();
         if(mc.level==null) return;
-        int distance=SkyboxConfig.get().skyboxRenderDistance();
-        var query=SkyBlockEntity.loadedNear(mc.level,frame.camera.x,frame.camera.z,distance);
+        int distance=frame.renderDistance;
         boolean allowSideCull=!ModCompat.IMMERSIVE_PORTALS;
         Matrix4f clipFromCamera=allowSideCull?new Matrix4f(frame.projection).mul(frame.view):null;
-        SkyBoxRenderState scratch=null;
-        int distanceCandidates=0,frustumRejected=0,frustumAccepted=0;
-        for(SkyBlockEntity sky:query.entities()) {
-            if(frame.seen.contains(sky.getBlockPos().asLong())) continue;
-            if(sky.isRemoved() || sky.getLevel()!=mc.level || mc.level.getBlockEntity(sky.getBlockPos())!=sky) continue;
+        SkyBoxRenderState scratch=FADE_RENDER_STATE.get();
+        frame.supplementDistanceCandidates=0;
+        frame.supplementFrustumRejected=0;
+        frame.supplementFrustumAccepted=0;
+        var visit=SkyBlockEntity.loadedVisitNear(mc.level,frame.camera.x,frame.camera.z,distance,sky -> {
+            if(frame.seen.contains(sky.getBlockPos().asLong())) return;
+            if(sky.isRemoved() || sky.getLevel()!=mc.level || mc.level.getBlockEntity(sky.getBlockPos())!=sky) return;
             double x=sky.getBlockPos().getX()+.5-frame.camera.x;
             double y=sky.getBlockPos().getY()+.5-frame.camera.y;
             double z=sky.getBlockPos().getZ()+.5-frame.camera.z;
-            if(x*x+y*y+z*z>=((double)distance*distance)) continue;
-            distanceCandidates++;
+            if(x*x+y*y+z*z>=((double)distance*distance)) return;
+            frame.supplementDistanceCandidates++;
             if(SkyWindowCull.outsideSidePlanes(sky.getBlockPos().getX(),sky.getBlockPos().getY(),sky.getBlockPos().getZ(),
-                    frame.camera.x,frame.camera.y,frame.camera.z,clipFromCamera)) {frustumRejected++;continue;}
-            frustumAccepted++;
-            if(scratch==null) scratch=FADE_RENDER_STATE.get();
+                    frame.camera.x,frame.camera.y,frame.camera.z,clipFromCamera)) {
+                frame.supplementFrustumRejected++;
+                return;
+            }
+            frame.supplementFrustumAccepted++;
             FADE_ENTITY_EXTRACTOR.extractRenderState(sky,scratch,frame.partialTick,frame.camera,null);
             if(scratch.skin!=null) collect(scratch,FADE_POSE);
-        }
-        frame.supplementColumnsVisited=query.occupiedColumnsVisited();
-        frame.supplementChunksVisited=query.occupiedChunksVisited();
-        frame.supplementEntriesVisited=query.indexedEntriesVisited();
-        frame.supplementDistanceCandidates=distanceCandidates;
-        frame.supplementFrustumRejected=frustumRejected;
-        frame.supplementFrustumAccepted=frustumAccepted;
-        SkyRenderPerf.supplement(frame.root(),query,distanceCandidates,frustumRejected,frustumAccepted);
+        });
+        frame.supplementColumnsVisited=visit.occupiedColumnsVisited();
+        frame.supplementChunksVisited=visit.occupiedChunksVisited();
+        frame.supplementEntriesVisited=visit.indexedEntriesVisited();
+        SkyRenderPerf.supplement(frame.root(),visit,frame.supplementDistanceCandidates,
+                frame.supplementFrustumRejected,frame.supplementFrustumAccepted);
     }
     private static void drawOpaquePass(Frame f) {
         if(!f.renderSkybox || f.batches.isEmpty())return;
@@ -376,7 +424,7 @@ public final class SkyWindowRenderer {
                     SkySkin skin=entry.getKey();int style=skin.texture()!=null?3:skin.shaderMode();
                     itrpBackground.integer("Style",style);itrpBackground.integer("Material",skin.material());
                     itrpBackground.texture("Image",0,skin.texture()!=null?texture(skin.texture()):f.sceneTexture,style==3?panorama:linear);
-                    itrpBackground.draw(entry.getValue().data,entry.getValue().count);
+                    itrpBackground.drawPositions(entry.getValue().data,entry.getValue().count);
                 }
                 f.itrpSceneInput=input.color();f.itrpOpaqueDepth=input.opaqueDepth();f.itrpExposure=input.exposure();f.itrpInjected=true;
                 if(bridgeDraws++<3)SkyboxBlockMod.LOGGER.info("[skyboxblock] ITRP scene input injected before composite40: view={} materials={} input={} depth={} exposure={}",f.token,f.batches.size(),input.color(),input.opaqueDepth(),input.exposure());
@@ -508,7 +556,7 @@ public final class SkyWindowRenderer {
             SkySkin skin=entry.getKey();int style=skin.texture()!=null?3:skin.shaderMode();
             window.integer("Style",style);window.integer("Material",skin.material());
             window.texture("Image",0,skin.texture()!=null?texture(skin.texture()):f.sceneTexture,style==3?panorama:linear);
-            window.draw(entry.getValue().data,entry.getValue().count);
+            window.drawPositions(entry.getValue().data,entry.getValue().count);
         }
     }
     static int gl(com.mojang.blaze3d.textures.GpuTexture texture) {

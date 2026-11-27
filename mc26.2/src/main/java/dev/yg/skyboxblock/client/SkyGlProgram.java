@@ -57,6 +57,19 @@ final class SkyGlProgram implements AutoCloseable {
         GL20.glEnableVertexAttribArray(2); GL20.glVertexAttribPointer(2,4,GL11.GL_FLOAT,false,36,20L);
         GL11.glDrawArrays(GL11.GL_TRIANGLES,0,count/9);
     }
+    /** Position-only path for sky-window surfaces; scene/cloud callers retain the interleaved 9-float layout. */
+    static final int POSITION_STRIDE_BYTES=3*Float.BYTES;
+    void drawPositions(float[] vertices,int count) {
+        if(count==0) return;
+        if(vao==0) { vao=GL30.glGenVertexArrays(); vbo=GL15.glGenBuffers(); }
+        GL30.glBindVertexArray(vao); GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER,vbo);
+        if(upload==null||upload.capacity()<count)upload=org.lwjgl.BufferUtils.createFloatBuffer(Integer.highestOneBit(Math.max(1024,count)-1)<<1);
+        upload.clear();upload.put(vertices,0,count).flip();GL15.glBufferData(GL15.GL_ARRAY_BUFFER,upload,GL15.GL_STREAM_DRAW);
+        GL20.glEnableVertexAttribArray(0);GL20.glVertexAttribPointer(0,3,GL11.GL_FLOAT,false,POSITION_STRIDE_BYTES,0L);
+        // Sky-window shaders consume Position only. Re-enable and retarget these for the unchanged scene path.
+        GL20.glDisableVertexAttribArray(1);GL20.glDisableVertexAttribArray(2);
+        GL11.glDrawArrays(GL11.GL_TRIANGLES,0,count/3);
+    }
     void draw(float[] vertices) { draw(vertices,vertices.length); }
     @Override public void close() {
         if(vao!=0) GL30.glDeleteVertexArrays(vao); if(vbo!=0) GL15.glDeleteBuffers(vbo); GL20.glDeleteProgram(id);

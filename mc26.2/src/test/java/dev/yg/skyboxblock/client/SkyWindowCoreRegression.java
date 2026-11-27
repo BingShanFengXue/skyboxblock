@@ -40,10 +40,20 @@ public final class SkyWindowCoreRegression {
         hook("net/minecraft/client/renderer/GameRenderer","renderLevel","net/minecraft/client/renderer/ProjectionMatrixBuffer","getBuffer","(Lorg/joml/Matrix4f;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;",1);
         final boolean[] reload={false};readClass("net/minecraft/client/renderer/texture/TextureManager",new ClassVisitor(Opcodes.ASM9){@Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){if(name.equals("lambda$reload$2"))reload[0]=true;return null;}});
         check(reload[0],"26.2 native resource apply lambda exists");
-        final boolean[] distanceFromConfig={false};
+        final boolean[] distanceFromConfig={false},distanceUsesViewSnapshot={false};
         readClass("dev/yg/skyboxblock/client/SkyBlockEntityRenderer",new ClassVisitor(Opcodes.ASM9){
             @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
                 if(!name.equals("getViewDistance")||!desc.equals("()I"))return null;
+                return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("viewDistanceInView"))distanceUsesViewSnapshot[0]=true;
+                    }
+                };
+            }
+        });
+        readClass("dev/yg/skyboxblock/client/SkyWindowRenderer",new ClassVisitor(Opcodes.ASM9){
+            @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
+                if(!name.equals("viewDistanceInView")||!desc.equals("()I"))return null;
                 return new MethodVisitor(Opcodes.ASM9){
                     @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
                         if(owner.equals("dev/yg/skyboxblock/client/SkyboxConfig")&&method.equals("skyboxRenderDistance"))distanceFromConfig[0]=true;
@@ -51,7 +61,7 @@ public final class SkyWindowCoreRegression {
                 };
             }
         });
-        check(distanceFromConfig[0],"sky-window visibility distance comes from the configurable local limit, not engine default 64");
+        check(distanceUsesViewSnapshot[0]&&distanceFromConfig[0],"sky-window visibility distance uses the frame snapshot of the configurable local limit, not engine default 64");
         check(SkyboxConfig.DEFAULT_SKYBOX_RENDER_DISTANCE==256,"default sky-window distance stays 256 blocks");
         check(SkyboxConfig.MAX_SKYBOX_RENDER_DISTANCE==4096,"sky-window distance can be raised to 4096 blocks");
         check(SkyboxConfig.parseSkyboxRenderDistance("4096")==4096,"configured distance accepts the upper bound");
@@ -73,14 +83,131 @@ public final class SkyWindowCoreRegression {
         final int[] exactVertices={0};
         readClass("dev/yg/skyboxblock/client/SkyWindowRenderer",new ClassVisitor(Opcodes.ASM9){
             @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
-                if(!name.equals("face"))return null;
+                if(!name.equals("appendFacePositions"))return null;
                 return new MethodVisitor(Opcodes.ASM9){@Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){if(owner.endsWith("SkyRenderMath")&&method.equals("relativeGridVertex"))exactVertices[0]++;}};
             }
         });
-        check(exactVertices[0]==3,"production face collection uses original double-before-float XYZ grid conversion");
+        check(exactVertices[0]==3,"production face collection keeps double-before-float XYZ grid conversion");
+        skyWindowGeometry();
+        positionOnlyDrawHooks();
         checks += SkyBlockSpatialIndexRegression.run();
         System.out.println("SkyWindowCoreRegression: "+checks+" checks passed (inverse VP, bob, raster, panorama, exact 26.2 hooks, fail-soft framebuffer targets, partitioned fallback collection)");
     }
+    private static void skyWindowGeometry() {
+        check(SkyWindowRenderer.FACE_POSITION_FLOATS==18
+                        && SkyWindowRenderer.FACE_POSITION_FLOATS*Float.BYTES==72,
+                "one window face is six XYZ vertices: 18 floats / 72 bytes");
+        int[] triangleOrder={0,1,2,0,2,3};
+        for(int i=0;i<triangleOrder.length;i++)
+            check(SkyWindowRenderer.faceTriangleIndex(i)==triangleOrder[i],"face triangle order remains 0,1,2 / 0,2,3");
+
+        // Copied from the six pre-optimization face(...) calls, in their original corner order.
+        float[][] corners={
+                {0,1,0, 0,1,1, 1,1,1, 1,1,0}, // up
+                {0,0,1, 0,0,0, 1,0,0, 1,0,1}, // down
+                {1,0,0, 0,0,0, 0,1,0, 1,1,0}, // north
+                {0,0,1, 1,0,1, 1,1,1, 0,1,1}, // south
+                {0,0,0, 0,0,1, 0,1,1, 0,1,0}, // west
+                {1,0,1, 1,0,0, 1,1,0, 1,1,1}  // east
+        };
+        for(int face=0;face<corners.length;face++) {
+            float[] actual=new float[24];java.util.Arrays.fill(actual,Float.NaN);
+            int end=SkyWindowRenderer.appendFacePositions(actual,3,face,-17,9,205,.125,-.5,3.75);
+            check(end==3+SkyWindowRenderer.FACE_POSITION_FLOATS,"one face appends exactly 18 position floats");
+            for(int vertex=0;vertex<triangleOrder.length;vertex++) {
+                int corner=triangleOrder[vertex]*3,at=3+vertex*3;
+                float x=SkyRenderMath.relativeGridVertex(-17,corners[face][corner],.125);
+                float y=SkyRenderMath.relativeGridVertex(9,corners[face][corner+1],-.5);
+                float z=SkyRenderMath.relativeGridVertex(205,corners[face][corner+2],3.75);
+                check(Float.floatToIntBits(actual[at])==Float.floatToIntBits(x)
+                                && Float.floatToIntBits(actual[at+1])==Float.floatToIntBits(y)
+                                && Float.floatToIntBits(actual[at+2])==Float.floatToIntBits(z),
+                        "face "+face+" keeps prior corner orientation and camera-relative XYZ order");
+            }
+            check(Float.isNaN(actual[0])&&Float.isNaN(actual[1])&&Float.isNaN(actual[2])
+                            &&Float.isNaN(actual[21])&&Float.isNaN(actual[22])&&Float.isNaN(actual[23]),
+                    "face writer respects its offset and writes no UV/color or extra vertices");
+        }
+
+        // Adjacent cubes must still round a shared world grid edge only after double subtraction.
+        float[] left=new float[18],right=new float[18];
+        double cameraX=20_000_000.6,cameraY=41.125,cameraZ=-27.875;
+        SkyWindowRenderer.appendFacePositions(left,0,0,20_000_000,44,-19,cameraX,cameraY,cameraZ);
+        SkyWindowRenderer.appendFacePositions(right,0,0,20_000_001,44,-19,cameraX,cameraY,cameraZ);
+        for(int axis=0;axis<3;axis++) {
+            check(Float.floatToIntBits(left[15+axis])==Float.floatToIntBits(right[axis]),
+                    "adjacent top-face shared corner remains bit-identical at large fractional camera positions");
+            check(Float.floatToIntBits(left[6+axis])==Float.floatToIntBits(right[3+axis]),
+                    "adjacent top-face shared edge remains bit-identical at large fractional camera positions");
+        }
+    }
+    private static void positionOnlyDrawHooks() throws Exception {
+        final boolean[] opaque=falseArray(),itrp=falseArray();
+        readClass("dev/yg/skyboxblock/client/SkyWindowRenderer",new ClassVisitor(Opcodes.ASM9){
+            @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
+                if(!name.equals("draw")&&!name.equals("beforeIrisComposite"))return null;
+                return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyGlProgram")&&method.equals("drawPositions")) {
+                            if(name.equals("draw"))opaque[0]=true;
+                            if(name.equals("beforeIrisComposite"))itrp[0]=true;
+                        }
+                    }
+                };
+            }
+        });
+        check(opaque[0],"opaque/coverage/final sky-window batch uses XYZ-only draw entry");
+        check(itrp[0],"ITRP background batch uses XYZ-only draw entry");
+
+        final boolean[] positionUpload=falseArray(),positionPointer=falseArray(),positionDraw=falseArray();
+        final boolean[] interleavedNineFloatPath=falseArray();
+        readClass("dev/yg/skyboxblock/client/SkyGlProgram",new ClassVisitor(Opcodes.ASM9){
+            @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
+                if(name.equals("drawPositions")&&desc.equals("([FI)V"))return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        if(owner.equals("org/lwjgl/opengl/GL15")&&method.equals("glBufferData"))positionUpload[0]=true;
+                        if(owner.equals("org/lwjgl/opengl/GL20")&&method.equals("glVertexAttribPointer"))positionPointer[0]=true;
+                        if(owner.equals("org/lwjgl/opengl/GL11")&&method.equals("glDrawArrays"))positionDraw[0]=true;
+                    }
+                };
+                if(name.equals("draw")&&desc.equals("([FI)V"))return new MethodVisitor(Opcodes.ASM9){
+                    int pointers;
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        if(owner.equals("org/lwjgl/opengl/GL20")&&method.equals("glVertexAttribPointer"))pointers++;
+                    }
+                    @Override public void visitEnd(){interleavedNineFloatPath[0]=pointers==3;}
+                };
+                return null;
+            }
+        });
+        check(SkyGlProgram.POSITION_STRIDE_BYTES==12&&positionUpload[0]&&positionPointer[0]&&positionDraw[0],
+                "position-only GL path streams xyz with 12-byte stride and six-vertex draw");
+        check(interleavedNineFloatPath[0],"existing three-attribute scene/cloud interleaved path stays intact");
+
+        final boolean[] hasArrayAllocation=falseArray(),hasFixedArguments=falseArray();
+        readClass("dev/yg/skyboxblock/client/SkyWindowRenderer$PositionBatch",new ClassVisitor(Opcodes.ASM9){
+            @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
+                if(!name.equals("face"))return null;
+                return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitIntInsn(int op,int operand){if(op==Opcodes.NEWARRAY)hasArrayAllocation[0]=true;}
+                    @Override public void visitTypeInsn(int op,String type){if(op==Opcodes.ANEWARRAY)hasArrayAllocation[0]=true;}
+                };
+            }
+        });
+        readClass("dev/yg/skyboxblock/client/SkyWindowRenderer",new ClassVisitor(Opcodes.ASM9){
+            @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
+                if(!name.equals("appendFacePositions"))return null;
+                hasFixedArguments[0]=desc.equals("([FIIIIIDDD)I");
+                return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitIntInsn(int op,int operand){if(op==Opcodes.NEWARRAY)hasArrayAllocation[0]=true;}
+                    @Override public void visitTypeInsn(int op,String type){if(op==Opcodes.ANEWARRAY)hasArrayAllocation[0]=true;}
+                };
+            }
+        });
+        check(!hasArrayAllocation[0],"production per-face expansion allocates no temporary arrays");
+        check(hasFixedArguments[0],"production corner expansion uses a fixed-argument signature, not float varargs");
+    }
+    private static boolean[] falseArray(){return new boolean[]{false};}
     private static void worldTargetValidation() {
         check(SkyWindowRenderer.worldTargetStatus(false,-1,11,12,1920,1080)
                         ==SkyWindowRenderer.WorldTargetStatus.READY_NATIVE,
@@ -172,11 +299,10 @@ public final class SkyWindowCoreRegression {
         final boolean[] loadedIndex={false},liveOwnership={false},distanceConfig={false},collect={false},beforeDrawn={false};
         readClass("dev/yg/skyboxblock/client/SkyWindowRenderer",new ClassVisitor(Opcodes.ASM9){
             @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
-                if(name.equals("collectSkippedSkyBlocks")) return new MethodVisitor(Opcodes.ASM9){
+                if(name.equals("collectSkippedSkyBlocks")||name.startsWith("lambda$collectSkippedSkyBlocks$")) return new MethodVisitor(Opcodes.ASM9){
                     @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
-                        if(owner.equals("dev/yg/skyboxblock/SkyBlockEntity")&&method.equals("loadedNear"))loadedIndex[0]=true;
+                        if(name.equals("collectSkippedSkyBlocks")&&owner.equals("dev/yg/skyboxblock/SkyBlockEntity")&&method.equals("loadedVisitNear"))loadedIndex[0]=true;
                         if(owner.equals("net/minecraft/client/multiplayer/ClientLevel")&&method.equals("getBlockEntity"))liveOwnership[0]=true;
-                        if(owner.equals("dev/yg/skyboxblock/client/SkyboxConfig")&&method.equals("skyboxRenderDistance"))distanceConfig[0]=true;
                         if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("collect"))collect[0]=true;
                     }
                 };
@@ -195,9 +321,19 @@ public final class SkyWindowCoreRegression {
                 return null;
             }
         });
-        check(loadedIndex[0],"supplement queries occupied sky-window chunk buckets near this camera instead of walking every loaded window");
+        readClass("dev/yg/skyboxblock/client/SkyWindowRenderer$Frame",new ClassVisitor(Opcodes.ASM9){
+            @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
+                if(!name.equals("<init>"))return null;
+                return new MethodVisitor(Opcodes.ASM9){
+                    @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyboxConfig")&&method.equals("skyboxRenderDistance"))distanceConfig[0]=true;
+                    }
+                };
+            }
+        });
+        check(loadedIndex[0],"supplement streams occupied sky-window chunk buckets near this camera instead of walking every loaded window");
         check(liveOwnership[0],"supplement rejects indexed entities not owned by the current client level");
-        check(distanceConfig[0],"supplement applies the configurable local distance limit");
+        check(distanceConfig[0],"each view snapshots the configurable local distance limit");
         check(collect[0]&&beforeDrawn[0],"supplement feeds the regular collector before the frame closes collection");
     }
     private static void hook(String owner,String method,String calledOwner,String called,String desc,int expected)throws Exception {

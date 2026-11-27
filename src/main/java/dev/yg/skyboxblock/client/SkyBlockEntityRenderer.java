@@ -13,5 +13,5 @@ public final class SkyBlockEntityRenderer implements BlockEntityRenderer<SkyBloc
                                  MultiBufferSource buffers, int light, int overlay) {
         SkyWorldRenderer.collect(block);
     }
-    @Override public int getViewDistance() { return SkyboxConfig.get().skyboxRenderDistance(); }
+    @Override public int getViewDistance() { return SkyWorldRenderer.viewDistanceInView(); }
 }

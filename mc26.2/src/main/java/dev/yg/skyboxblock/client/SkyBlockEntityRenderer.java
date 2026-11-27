@@ -19,12 +19,12 @@ import net.minecraft.world.phys.Vec3;
 public final class SkyBlockEntityRenderer implements BlockEntityRenderer<SkyBlockEntity, SkyBoxRenderState> {
     @Override public SkyBoxRenderState createRenderState() { return new SkyBoxRenderState(); }
     /** Match the 1.21.1 collector; the engine's default 64 would silently cull distant sky walls. */
-    @Override public int getViewDistance() { return SkyboxConfig.get().skyboxRenderDistance(); }
+    @Override public int getViewDistance() { return SkyWindowRenderer.viewDistanceInView(); }
 
     @Override public void extractRenderState(SkyBlockEntity entity, SkyBoxRenderState state, float partialTick,
                                              Vec3 cameraPos, ModelFeatureRenderer.CrumblingOverlay crumbling) {
         BlockEntityRenderer.super.extractRenderState(entity, state, partialTick, cameraPos, crumbling);
-        if (!SkyboxConfig.get().environment().rendersSkybox()) {
+        if (!SkyWindowRenderer.renderSkyboxInView()) {
             state.skin = null;
             return;
         }

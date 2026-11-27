@@ -13,7 +13,7 @@ import java.util.ArrayDeque;
 /** Opt-in fixture telemetry. Timestamp results are read only after the driver marks them ready. */
 public final class SkyRenderPerf {
     static final boolean ENABLED = Boolean.getBoolean("skyboxblock.perf.capture");
-    enum Stage { OPAQUE, WORLD_CANVAS, DISPLAY_CANVAS, RESOLVE, TRANS_BEFORE, TRANS_AFTER }
+    enum Stage { OPAQUE, SUPPLEMENT, WORLD_CANVAS, DISPLAY_CANVAS, RESOLVE, TRANS_BEFORE, TRANS_AFTER }
     private static final Stage[] STAGES = Stage.values();
     private static final int QUERY_PAIRS = 48;
     private static Capture active;
@@ -55,7 +55,7 @@ public final class SkyRenderPerf {
         c.visible[c.row] = enabled ? 1 : 0;
     }
 
-    static void supplement(boolean root, dev.yg.skyboxblock.SkyBlockSpatialIndex.Query<?> query,
+    static void supplement(boolean root, dev.yg.skyboxblock.SkyBlockSpatialIndex.VisitStats query,
                            int distanceCandidates, int frustumRejected, int frustumAccepted) {
         Capture c = active;
         if (!ENABLED || c == null || !c.inFrame || !root) return;
@@ -73,6 +73,12 @@ public final class SkyRenderPerf {
         Capture c = active;
         if (!ENABLED || c == null || !c.inFrame || !root) return;
         c.copyPixels[c.row] += pixels;
+    }
+
+    static Span cpuSpan(Stage stage, boolean root) {
+        Capture c = active;
+        if (!ENABLED || c == null || !c.inFrame || !root) return Span.NONE;
+        return new Span(c, c.row, stage.ordinal(), null, System.nanoTime());
     }
 
     static Span span(Stage stage, boolean root) {
