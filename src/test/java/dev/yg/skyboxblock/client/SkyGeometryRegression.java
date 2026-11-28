@@ -274,6 +274,7 @@ public final class SkyGeometryRegression {
             require(scopes.isEmpty(),"cancelled root invocation leaves no retained scope");
         }
         checks += dev.yg.skyboxblock.client.SkyBlockSpatialIndexRegression.run();
+        checks += SkyF3DiagnosticsRegression.run();
         String report="PASS: "+checks+" assertions; world-space geometry, 10000 independent sky rays, 6000 FSR raster/jitter transforms, 1000 distance occlusion orders, 10000 fixed cloud-height invariants, 50000 shared-grid endpoints with old-rounding negative control, 30000 conditional sky-time/moon properties and explicit policy overrides, 10000 forward-only fixture clock phases, sun directions, portal plane, config precedence, chunk-index work bounds and conservative side-plane culling\n";
         System.out.print(report);
         if(args.length>0) { Path path=Path.of(args[0]); Files.createDirectories(path.toAbsolutePath().getParent()); Files.writeString(path,report,StandardCharsets.UTF_8); }

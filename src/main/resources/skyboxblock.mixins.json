@@ -11,6 +11,7 @@
     "LevelRendererMixin",
     "BufferSourceMixin",
     "GameRendererMixin",
+    "SkyF3OverlayMixin",
     "IrisPipelineMixin",
     "IrisCompositeMixin",
     "IrisExposureComputeMixin",

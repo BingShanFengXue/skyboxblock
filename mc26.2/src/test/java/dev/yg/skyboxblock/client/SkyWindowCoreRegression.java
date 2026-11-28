@@ -90,6 +90,7 @@ public final class SkyWindowCoreRegression {
         check(exactVertices[0]==3,"production face collection keeps double-before-float XYZ grid conversion");
         skyWindowGeometry();
         positionOnlyDrawHooks();
+        checks += SkyboxF3DiagnosticsRegression.run();
         checks += SkyBlockSpatialIndexRegression.run();
         System.out.println("SkyWindowCoreRegression: "+checks+" checks passed (inverse VP, bob, raster, panorama, exact 26.2 hooks, fail-soft framebuffer targets, partitioned fallback collection)");
     }
@@ -142,22 +143,24 @@ public final class SkyWindowCoreRegression {
         }
     }
     private static void positionOnlyDrawHooks() throws Exception {
-        final boolean[] opaque=falseArray(),itrp=falseArray();
+        final boolean[] opaque=falseArray(),itrp=falseArray(),xyz=falseArray();
         readClass("dev/yg/skyboxblock/client/SkyWindowRenderer",new ClassVisitor(Opcodes.ASM9){
             @Override public MethodVisitor visitMethod(int access,String name,String desc,String sig,String[] ex){
-                if(!name.equals("draw")&&!name.equals("beforeIrisComposite"))return null;
+                if(!name.equals("draw")&&!name.equals("beforeIrisComposite")&&!name.equals("drawWindowPositions"))return null;
                 return new MethodVisitor(Opcodes.ASM9){
                     @Override public void visitMethodInsn(int op,String owner,String method,String d,boolean iface){
-                        if(owner.equals("dev/yg/skyboxblock/client/SkyGlProgram")&&method.equals("drawPositions")) {
+                        if(owner.equals("dev/yg/skyboxblock/client/SkyWindowRenderer")&&method.equals("drawWindowPositions")) {
                             if(name.equals("draw"))opaque[0]=true;
                             if(name.equals("beforeIrisComposite"))itrp[0]=true;
                         }
+                        if(name.equals("drawWindowPositions")&&owner.equals("dev/yg/skyboxblock/client/SkyGlProgram")
+                                &&method.equals("drawPositions")&&d.equals("([FI)V"))xyz[0]=true;
                     }
                 };
             }
         });
-        check(opaque[0],"opaque/coverage/final sky-window batch uses XYZ-only draw entry");
-        check(itrp[0],"ITRP background batch uses XYZ-only draw entry");
+        check(opaque[0]&&xyz[0],"opaque/coverage/final sky-window batch uses XYZ-only draw entry");
+        check(itrp[0]&&xyz[0],"ITRP background batch uses XYZ-only draw entry");
 
         final boolean[] positionUpload=falseArray(),positionPointer=falseArray(),positionDraw=falseArray();
         final boolean[] interleavedNineFloatPath=falseArray();

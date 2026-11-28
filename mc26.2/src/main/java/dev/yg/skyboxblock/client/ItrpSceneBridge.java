@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Audited ITRP 0.8.31 / Iris 1.11.4 scene-input adapter. No guessed global colortex IDs.
@@ -35,8 +36,12 @@ final class ItrpSceneBridge {
     private ItrpSceneBridge() { }
 
     /** Caller owns SkyGlScope; reads the foreign FBO but mutates only texture-unit zero bindings. */
-    static MaterialTargets opaque(int source,int color,int depth,int width,int height) {
-        if(!ModCompat.irisActive() || source<=0 || !supportedPack())return null;
+    static MaterialTargets opaque(int source,int color,int depth,int width,int height,Consumer<String> diagnostic) {
+        if(!ModCompat.irisActive() || source<=0)return null;
+        if(!supportedPack()) {
+            if(diagnostic!=null)diagnostic.accept("pack/Iris not verified");
+            return null;
+        }
         try {
             Object pipeline=ModCompat.pipeline(),targets=ModCompat.field(pipeline,"renderTargets");
             Object composite=ModCompat.field(pipeline,"compositeRenderer");
@@ -58,11 +63,14 @@ final class ItrpSceneBridge {
             requireStorage(storage(textures[2]),width,height,GL11.GL_RGBA16,"solid-normal-storage-mismatch");
             if(REPORTED.add("material-ready"))SkyboxBlockMod.LOGGER.info("[skyboxblock] ITRP scene bridge: audited 0.8.31 material MRT and composite25/40/50 plan validated");
             return new MaterialTargets(pipeline,targets,composite,textures[1],textures[2]);
-        } catch(ReflectiveOperationException|RuntimeException error) {failure("opaque-validation",error);return null;}
+        } catch(ReflectiveOperationException|RuntimeException error) {
+            reportDiagnostic(diagnostic,"MRT",error);
+            failure("opaque-validation",error);return null;
+        }
     }
 
     /** Called after actual Program.use/customUniforms.push and immediately before Iris's indexed quad. */
-    static SceneInput sceneInput(Object owner,MaterialTargets material,int width,int height,int coverage,int generatedSky) {
+    static SceneInput sceneInput(Object owner,MaterialTargets material,int width,int height,int coverage,int generatedSky,Consumer<String> diagnostic) {
         if(material==null || owner!=material.composite())return null;
         try {
             Object pipeline=ModCompat.pipeline(),targets=ModCompat.field(owner,"renderTargets");
@@ -101,7 +109,10 @@ final class ItrpSceneBridge {
             require(input!=depth && input!=coverage && input!=generatedSky && input!=exposure && exposure!=depth && exposure!=coverage,"scene-source-alias");
             if(REPORTED.add("scene-ready"))SkyboxBlockMod.LOGGER.info("[skyboxblock] ITRP scene bridge: composite40 actual colortex6 RGBA16F input, opaque depth {} bits and pixelData2D verified",bits);
             return new SceneInput(input,depth,exposure);
-        } catch(ReflectiveOperationException|RuntimeException error) {failure("scene-validation",error);return null;}
+        } catch(ReflectiveOperationException|RuntimeException error) {
+            reportDiagnostic(diagnostic,"scene",error);
+            failure("scene-validation",error);return null;
+        }
     }
 
     record MeterInputs(int atlas,int exposure,int opaqueDepth,int width,int height,int unit,int sampler,float pixelX,float pixelY) { }
@@ -239,6 +250,10 @@ final class ItrpSceneBridge {
                 || format==GL30.GL_DEPTH_COMPONENT32F || format==GL30.GL_DEPTH24_STENCIL8 || format==GL30.GL_DEPTH32F_STENCIL8;
     }
     private static void require(boolean okay,String reason) {if(!okay)throw new IllegalStateException(reason);}
+    private static void reportDiagnostic(Consumer<String> diagnostic,String stage,Throwable error) {
+        if(diagnostic!=null)diagnostic.accept(stage+": "+(error instanceof IllegalStateException && error.getMessage()!=null
+                ?error.getMessage():error.getClass().getSimpleName()));
+    }
     private static void failure(String reason,Throwable error) {
         String key=reason+":"+error;
         if(REPORTED.add(key))SkyboxBlockMod.LOGGER.warn("[skyboxblock] ITRP scene bridge {}: {} (generic sky path retained)",reason,error.toString());

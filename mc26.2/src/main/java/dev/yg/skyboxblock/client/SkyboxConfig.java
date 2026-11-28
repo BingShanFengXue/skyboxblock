@@ -23,6 +23,8 @@ public final class SkyboxConfig {
     public static final int MAX_SKYBOX_RENDER_DISTANCE=4096;
     private static final String SKYBOX_RENDER_DISTANCE_KEY="skyboxRenderDistance";
     private final int skyboxRenderDistance;
+    private final String skyboxRenderDistanceSource;
+    private record RenderDistance(int value, String source) { }
     private float vanillaCloudHeight = SkyRenderMath.VANILLA_CLOUD_HEIGHT;
     public static final float MIN_CLOUD_HEIGHT=-32768F, MAX_CLOUD_HEIGHT=32768F;
     public static final float DEFAULT_CLOUD_FADE_START=128F, DEFAULT_CLOUD_FADE_END=384F;
@@ -34,10 +36,11 @@ public final class SkyboxConfig {
     private SkyTimeClock.Setting skyTime=SkyTimeClock.Setting.AUTO;
     private SkyboxConfig(boolean clouds,boolean debug,boolean simulatedLocalWeather,
                          java.util.Set<String> localTimeDimensions,java.util.Set<String> simulatedTimeDimensions,
-                         int skyboxRenderDistance) {
+                         RenderDistance renderDistance) {
         this.clouds=clouds; this.debug=debug; this.simulatedLocalWeather=simulatedLocalWeather;
         this.localTimeDimensions=localTimeDimensions; this.simulatedTimeDimensions=simulatedTimeDimensions;
-        this.skyboxRenderDistance=skyboxRenderDistance;
+        this.skyboxRenderDistance=renderDistance.value();
+        this.skyboxRenderDistanceSource=renderDistance.source();
     }
     /** Test-only override of the config file (null = the real instance config directory). */
     private static java.nio.file.Path testFile;
@@ -58,11 +61,9 @@ public final class SkyboxConfig {
     public static SkyboxConfig get() {
         if(instance==null) {
             Properties properties=readProperties();
-            int renderDistance=parseSkyboxRenderDistance(option(properties,SKYBOX_RENDER_DISTANCE_KEY,
-                    Integer.toString(DEFAULT_SKYBOX_RENDER_DISTANCE)));
             if(SkyboxServerState.enforced()) {
                 instance=new SkyboxConfig(true,Boolean.getBoolean("skyboxblock.debug"),false,
-                        java.util.Set.of(),java.util.Set.of(),renderDistance);
+                        java.util.Set.of(),java.util.Set.of(),renderDistance(properties));
             } else instance=fromProperties(properties);
         }
         return instance;
@@ -80,8 +81,7 @@ public final class SkyboxConfig {
                 Boolean.parseBoolean(option(file,"debug","false")),
                 option(file,"simulatedWeather","clear").equalsIgnoreCase("local"),
                 dimensions(option(file,"localTimeDimensions","")),dimensions(option(file,"simulatedTimeDimensions","")),
-                parseSkyboxRenderDistance(option(file,SKYBOX_RENDER_DISTANCE_KEY,
-                        Integer.toString(DEFAULT_SKYBOX_RENDER_DISTANCE))));
+                renderDistance(file));
         config.vanillaCloudHeight=parseCloudHeight(option(file,"vanillaCloudHeight","192"));
         config.vanillaCloudFadeEnd=parseCloudDistance(option(file,"vanillaCloudFadeEnd","384"));
         config.vanillaCloudFadeStart=parseCloudFadeStart(option(file,"vanillaCloudFadeStart","128"),config.vanillaCloudFadeEnd);
@@ -256,16 +256,25 @@ public final class SkyboxConfig {
             properties.setProperty("vanillaCloudFadeEnd",Float.toString(end));
         });
     }
-    static int parseSkyboxRenderDistance(String text) {
-        if(text==null) return DEFAULT_SKYBOX_RENDER_DISTANCE;
-        try {
-            int value=Integer.parseInt(text.trim());
-            if(value>=MIN_SKYBOX_RENDER_DISTANCE && value<=MAX_SKYBOX_RENDER_DISTANCE) return value;
-        } catch(NumberFormatException ignored) { }
-        LOGGER.warn("[skyboxblock] invalid skyboxRenderDistance {}; using {}",text,DEFAULT_SKYBOX_RENDER_DISTANCE);
-        return DEFAULT_SKYBOX_RENDER_DISTANCE;
+    static int parseSkyboxRenderDistance(String text) { return parseDistance(text,"DEFAULT").value(); }
+    private static RenderDistance renderDistance(Properties file) {
+        String jvm=System.getProperty("skyboxblock."+SKYBOX_RENDER_DISTANCE_KEY);
+        return jvm!=null ? parseDistance(jvm,"JVM")
+                : parseDistance(file.getProperty(SKYBOX_RENDER_DISTANCE_KEY),"FILE");
+    }
+    private static RenderDistance parseDistance(String text,String source) {
+        if(text!=null) {
+            try {
+                int value=Integer.parseInt(text.trim());
+                if(value>=MIN_SKYBOX_RENDER_DISTANCE && value<=MAX_SKYBOX_RENDER_DISTANCE)
+                    return new RenderDistance(value,source);
+            } catch(NumberFormatException ignored) { }
+            LOGGER.warn("[skyboxblock] invalid skyboxRenderDistance {}; using {}",text,DEFAULT_SKYBOX_RENDER_DISTANCE);
+        }
+        return new RenderDistance(DEFAULT_SKYBOX_RENDER_DISTANCE,"DEFAULT");
     }
     public int skyboxRenderDistance() { return skyboxRenderDistance; }
+    public String skyboxRenderDistanceSource() { return skyboxRenderDistanceSource; }
     public static void setSkyboxRenderDistance(int distance) throws IOException {
         if(distance<MIN_SKYBOX_RENDER_DISTANCE || distance>MAX_SKYBOX_RENDER_DISTANCE)
             throw new IllegalArgumentException("Skybox render distance must be 16..4096 blocks");

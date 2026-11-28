@@ -17,12 +17,17 @@ final class SkyMesh implements AutoCloseable {
     private FloatBuffer upload;
 
     void draw(ShaderInstance shader, float[] data, int floats, boolean textured) {
-        draw(shader,data,floats,textured ? 5 : 3);
+        draw(shader,data,floats,textured ? 5 : 3,null);
     }
 
-    void drawColored(ShaderInstance shader, float[] data) { draw(shader,data,data.length,7); }
+    void drawColored(ShaderInstance shader, float[] data) { draw(shader,data,data.length,7,null); }
 
-    private void draw(ShaderInstance shader,float[] data,int floats,int stride) {
+    /** Only sky-window face draws contribute to the owning view's F3 diagnostics. */
+    void drawSkyFaces(ShaderInstance shader, float[] data, int floats, SkyWorldRenderer.Frame frame) {
+        draw(shader,data,floats,3,frame.diagnosticsEnabled ? frame : null);
+    }
+
+    private void draw(ShaderInstance shader,float[] data,int floats,int stride,SkyWorldRenderer.Frame counters) {
         if (floats == 0) return;
         if (vao == 0) {
             vao = GL30.glGenVertexArrays();
@@ -39,6 +44,7 @@ final class SkyMesh implements AutoCloseable {
             GL30.glBindVertexArray(vao);
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
             GL15.glBufferData(GL15.GL_ARRAY_BUFFER, upload, GL15.GL_STREAM_DRAW);
+            if (counters!=null) counters.surfaceUploadBytes+=(long)upload.remaining()*Float.BYTES;
             int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
             int position = GL20.glGetAttribLocation(program, "Position");
             int uv = stride==5 ? GL20.glGetAttribLocation(program, "UV0") : -1;
@@ -55,6 +61,7 @@ final class SkyMesh implements AutoCloseable {
                 GL20.glVertexAttribPointer(color, 4, GL11.GL_FLOAT, false, stride * Float.BYTES, 3L * Float.BYTES);
             }
             GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, floats / stride);
+            if (counters!=null) counters.surfaceDrawCalls++;
             GL20.glDisableVertexAttribArray(position);
             if (uv >= 0) GL20.glDisableVertexAttribArray(uv);
             if (color >= 0) GL20.glDisableVertexAttribArray(color);

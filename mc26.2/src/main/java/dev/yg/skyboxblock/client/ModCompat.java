@@ -71,6 +71,19 @@ public final class ModCompat {
         for(Class<?> c=object.getClass();c!=null;c=c.getSuperclass())try {var f=c.getDeclaredField(name);f.setAccessible(true);return f.get(object);}catch(NoSuchFieldException ignored){}
         throw new NoSuchFieldException(object.getClass().getName()+"."+name);
     }
+    static final boolean SODIUM=FabricLoader.getInstance().isModLoaded("sodium");
+
+    enum PortalView { NO, YES, UNKNOWN }
+    static PortalView portalRenderingForDiagnostics() {
+        if(!IMMERSIVE_PORTALS)return PortalView.NO;
+        try {
+            Class<?> type=Class.forName("qouteall.imm_ptl.core.render.context_management.PortalRendering");
+            return Boolean.TRUE.equals(type.getMethod("isRendering").invoke(null)) ? PortalView.YES : PortalView.NO;
+        } catch(ReflectiveOperationException|RuntimeException|LinkageError error) {
+            return PortalView.UNKNOWN;
+        }
+    }
+
     static Vector4f portalClip(net.minecraft.world.phys.Vec3 camera) {
         if(!IMMERSIVE_PORTALS)return null;
         try {Class<?> c=Class.forName("qouteall.imm_ptl.core.render.context_management.PortalRendering");

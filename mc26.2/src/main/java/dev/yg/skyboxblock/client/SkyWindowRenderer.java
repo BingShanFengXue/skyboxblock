@@ -59,6 +59,9 @@ public final class SkyWindowRenderer {
     private static final java.util.concurrent.atomic.AtomicBoolean REPORTED_WORLD_TARGET_FAILURE=
             new java.util.concurrent.atomic.AtomicBoolean();
     private static Frame fixtureFrame;
+    private static boolean diagnoseGame;
+    private static int diagnosticPortalSlot=-1,diagnosticShadowSlot=-1;
+    private static SkyboxF3Diagnostics.Snapshot pendingRootDiagnostics;
     private SkyWindowRenderer() { }
     static long transaction() {return transaction;}
 
@@ -114,8 +117,13 @@ public final class SkyWindowRenderer {
         final boolean shadow,renderSkybox;
         final int renderDistance;
         final int slot;
-        boolean lateResolve,usesVanillaCanvas;
+        final boolean diagnose,diagnosticRoot,diagnosticServer;
+        final String diagnosticDistanceSource;
+        boolean lateResolve,usesVanillaCanvas,diagnosticIris,opaqueDrawn,coverageDrawn;
         int faces;
+        int beEntities,fallbackEntities,culledFaces,geometryDrawCalls;
+        long geometryUploadBytes;
+        String drawReason="",itrpReason="";
         int supplementColumnsVisited,supplementChunksVisited,supplementEntriesVisited;
         int supplementDistanceCandidates,supplementFrustumRejected,supplementFrustumAccepted;
         boolean root() { return slot==0 && GAME_VIEWS.size()==1; }
@@ -133,6 +141,13 @@ public final class SkyWindowRenderer {
             renderSkybox=config.environment().rendersSkybox();
             renderDistance=config.skyboxRenderDistance();
             shadow=ModCompat.irisShadowPass();sky=renderSkybox ? new SkySceneState(state,partial) : null;
+            diagnose=diagnoseGame;
+            var portal=diagnose && !shadow ? ModCompat.portalRenderingForDiagnostics() : null;
+            diagnosticRoot=diagnose && root() && !shadow && portal==ModCompat.PortalView.NO;
+            if(diagnose && shadow) diagnosticShadowSlot=slot;
+            if(portal==ModCompat.PortalView.YES) diagnosticPortalSlot=slot;
+            diagnosticServer=diagnose && SkyboxServerState.enforced();
+            diagnosticDistanceSource=diagnose ? config.skyboxRenderDistanceSource() : "";
         }
     }
     private static final class Gpu implements AutoCloseable {
@@ -161,13 +176,24 @@ public final class SkyWindowRenderer {
             FRAMES.clear();
             fixtureFrame=null;
             SkyRenderPerf.beginFrame();
+            pendingRootDiagnostics=null;
+            diagnosticPortalSlot=diagnosticShadowSlot=-1;
+            Minecraft mc=Minecraft.getInstance();
+            diagnoseGame=SkyboxF3Diagnostics.frameStart(mc.level,mc.debugEntries.isOverlayVisible()
+                    && mc.isGameLoadFinished() && mc.getDebugOverlay().showDebugScreen());
         }
         GAME_VIEWS.push(new GameView(new Matrix4f(PROJECTION),projectionValid,transaction,FRAMES.size()));
         projectionValid=false;transaction=++sequence;
     }
     public static void endGame(boolean complete) {
         GameView game=GAME_VIEWS.pop();
-        if(GAME_VIEWS.isEmpty()) SkyRenderPerf.endFrame(complete);
+        if(GAME_VIEWS.isEmpty()) {
+            SkyRenderPerf.endFrame(complete);
+            if(complete && pendingRootDiagnostics!=null && pendingRootDiagnostics.transaction()==transaction)
+                SkyboxF3Diagnostics.publish(pendingRootDiagnostics,diagnosticPortalSlot,diagnosticShadowSlot);
+            pendingRootDiagnostics=null;
+            diagnoseGame=false;
+        }
         while(FRAMES.size()>game.depth())FRAMES.pop();
         PROJECTION.set(game.projection());projectionValid=game.valid();transaction=game.token();
     }
@@ -189,23 +215,58 @@ public final class SkyWindowRenderer {
                 if(!ModCompat.irisActive())captureLateTransparency(f);
                 resolve(f);
             }
+            if(f.diagnosticRoot && f.clip==null) pendingRootDiagnostics=captureRootDiagnostics(f);
         }
         finally {FRAMES.pop();}
     }
 
-    public static void collect(SkyBoxRenderState state,Matrix4fc pose) {
+    private static SkyboxF3Diagnostics.Snapshot captureRootDiagnostics(Frame f) {
+        var styles=new java.util.ArrayList<String>(3);
+        for(SkySkin skin:f.batches.keySet()){if(styles.size()==3)break;styles.add(skin.id());}
+        boolean iris=f.drawn && !f.batches.isEmpty() ? f.diagnosticIris : ModCompat.irisActive();
+        String draw=f.resolved?"FINAL":f.coverageDrawn?"COVERAGE":f.opaqueDrawn?"OPAQUE":!f.renderSkybox?"OFF":!f.drawn?"NO-PASS":
+                f.batches.isEmpty()?"EMPTY":"SKIP";
+        String itrp=f.itrpInjected?"INJECTED":f.itrpMaterial!=null?"MRT-only":iris?"SKIP":"OFF";
+        String itrpReason=f.itrpInjected?"":!f.itrpReason.isEmpty()?f.itrpReason:
+                f.itrpMaterial!=null?"composite40 not seen":iris && !f.opaqueDrawn?draw:"";
+        String drawReason=f.drawReason.isEmpty() && f.opaqueDrawn && f.lateResolve && !f.resolved?"final not reached":f.drawReason;
+        return new SkyboxF3Diagnostics.Snapshot(f.diagnosticRoot,false,f.shadow,f.slot,f.token,
+                f.renderSkybox,f.diagnosticServer?"SERVER":"LOCAL",f.renderDistance,f.diagnosticDistanceSource,
+                styles,f.batches.size(),f.beEntities,f.fallbackEntities,f.faces,f.culledFaces,
+                f.supplementColumnsVisited,f.supplementChunksVisited,f.supplementEntriesVisited,iris,ModCompat.SODIUM,
+                ModCompat.DISTANT_HORIZONS,ModCompat.IMMERSIVE_PORTALS,itrp,itrpReason,draw,drawReason,
+                f.width,f.height,f.scale.x,f.scale.y,f.jitter.x,f.jitter.y,f.geometryDrawCalls,
+                f.geometryUploadBytes,SkyboxF3Diagnostics.percentiles());
+    }
+
+    public static java.util.List<String> diagnosticsLines(net.minecraft.client.multiplayer.ClientLevel level) {
+        return SkyboxF3Diagnostics.lines(level);
+    }
+
+    public static void collect(SkyBoxRenderState state,Matrix4fc pose) { collect(state,pose,false); }
+    private static void collect(SkyBoxRenderState state,Matrix4fc pose,boolean fallback) {
         Frame f=FRAMES.peek();if(f==null||!f.renderSkybox||f.drawn||f.shadow||ModCompat.irisShadowPass()||state.skin==null)return;
         if(!f.seen.add(state.blockPos.asLong()))return;
-        if(!(state.up||state.down||state.north||state.south||state.west||state.east))return;
+        int emitted=(state.up?1:0)+(state.down?1:0)+(state.north?1:0)+(state.south?1:0)+(state.west?1:0)+(state.east?1:0);
+        if(f.diagnose) {
+            if(fallback)f.fallbackEntities++;else f.beEntities++;
+            f.culledFaces+=6-emitted;
+        }
+        if(emitted==0)return;
         if(state.skin.texture()==null && state.skin.shaderMode()==0) f.usesVanillaCanvas=true;
         PositionBatch out=f.batches.computeIfAbsent(state.skin,k -> new PositionBatch());
-        f.faces+=(state.up?1:0)+(state.down?1:0)+(state.north?1:0)+(state.south?1:0)+(state.west?1:0)+(state.east?1:0);
+        f.faces+=emitted;
         if(state.up)out.face(state.blockPos,f.camera,FACE_UP);
         if(state.down)out.face(state.blockPos,f.camera,FACE_DOWN);
         if(state.north)out.face(state.blockPos,f.camera,FACE_NORTH);
         if(state.south)out.face(state.blockPos,f.camera,FACE_SOUTH);
         if(state.west)out.face(state.blockPos,f.camera,FACE_WEST);
         if(state.east)out.face(state.blockPos,f.camera,FACE_EAST);
+    }
+    private static void drawWindowPositions(Frame f,SkyGlProgram program,PositionBatch batch) {
+        if(batch.count==0)return;
+        program.drawPositions(batch.data,batch.count);
+        if(f.diagnose){f.geometryDrawCalls++;f.geometryUploadBytes+=(long)batch.count*Float.BYTES;}
     }
     /** Immutable, borrowed-name snapshot for the meter only. Never exposes a mutable Frame/Gpu. */
     record MeterView(long token,boolean root,boolean portal,int slot,boolean shadow,
@@ -277,7 +338,7 @@ public final class SkyWindowRenderer {
             }
             frame.supplementFrustumAccepted++;
             FADE_ENTITY_EXTRACTOR.extractRenderState(sky,scratch,frame.partialTick,frame.camera,null);
-            if(scratch.skin!=null) collect(scratch,FADE_POSE);
+            if(scratch.skin!=null) collect(scratch,FADE_POSE,true);
         });
         frame.supplementColumnsVisited=visit.occupiedColumnsVisited();
         frame.supplementChunksVisited=visit.occupiedChunksVisited();
@@ -296,6 +357,7 @@ public final class SkyWindowRenderer {
                     "Iris state adapter: "+error.getClass().getSimpleName()+": "+String.valueOf(error.getMessage()));
             return;
         }
+        if(f.diagnose) f.diagnosticIris=iris;
         if(shadow)return;
         if(FIXTURE_CONTROL) fixtureFrame=f;
         f.lateResolve=iris || ModCompat.DISTANT_HORIZONS;
@@ -320,7 +382,8 @@ public final class SkyWindowRenderer {
                     f.sceneTexture=g.scene.render(f.sky,f.rasterProjection,f.view,f.width,f.height,f.camera);
                 }
             } else f.sceneTexture=sunTexture;
-            f.itrpMaterial=ItrpSceneBridge.opaque(f.opaqueFbo,f.worldColor,f.worldDepth,f.width,f.height);
+            f.itrpMaterial=ItrpSceneBridge.opaque(f.opaqueFbo,f.worldColor,f.worldDepth,f.width,f.height,
+                    f.diagnose?reason -> f.itrpReason=reason:null);
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,g.worldFbo);
             // Private alias only: never rewrite a foreign Iris FBO's draw routing or attachments.
             attach(GL30.GL_COLOR_ATTACHMENT1,f.itrpMaterial==null?0:f.itrpMaterial.solid());
@@ -330,6 +393,7 @@ public final class SkyWindowRenderer {
             checkFramebuffer("world sky material alias");GL11.glViewport(0,0,f.width,f.height);
             SkyGlScope.clean();GL11.glEnable(GL11.GL_DEPTH_TEST);GL11.glDepthFunc(GL11.GL_GEQUAL);GL11.glDepthMask(true);
             clip(f);draw(f,g,0,false);
+            if(f.diagnose) f.opaqueDrawn=true;
             // Nearest-surface provenance is read only by Iris/DH late resolve or explicit fixture readback.
             if(needsProvenance) {
                 GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,g.coverageFbo);
@@ -337,6 +401,7 @@ public final class SkyWindowRenderer {
                 GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);checkFramebuffer("sky provenance");
                 GL30.glClearBufferfv(GL11.GL_COLOR,0,new float[]{0,0,0,0});GL11.glDepthFunc(GL11.GL_EQUAL);GL11.glDepthMask(false);
                 draw(f,g,1,false);
+                if(f.diagnose) f.coverageDrawn=true;
             }
             if(diagnostics++<3)SkyboxBlockMod.LOGGER.info("[skyboxblock] isolated opaque view={} blocks={} materials={} target={}x{} Iris={} scale={} jitter={} supplement(columns/chunks/entries/distance/frustum-out/in)={}/{}/{}/{}/{}/{}",f.token,f.seen.size(),f.batches.size(),f.width,f.height,ModCompat.irisActive(),f.scale,f.jitter,f.supplementColumnsVisited,f.supplementChunksVisited,f.supplementEntriesVisited,f.supplementDistanceCandidates,f.supplementFrustumRejected,f.supplementFrustumAccepted);
         }
@@ -389,6 +454,7 @@ public final class SkyWindowRenderer {
     }
 
     private static boolean skipWorldTarget(Frame f,WorldTargetStatus status,String detail) {
+        if(f.diagnose) f.drawReason=status.name();
         f.worldTargetReady=false;
         f.worldColor=f.worldDepth=f.width=f.height=0;
         if(REPORTED_WORLD_TARGET_FAILURE.compareAndSet(false,true))
@@ -401,7 +467,8 @@ public final class SkyWindowRenderer {
         if(f==null || f.shadow || !f.drawn || f.resolved || f.itrpInjected || f.itrpMaterial==null || f.batches.isEmpty())return;
         try(SkyGlScope ignored=new SkyGlScope()) {
             Gpu g=gpu(f);
-            ItrpSceneBridge.SceneInput input=ItrpSceneBridge.sceneInput(owner,f.itrpMaterial,f.width,f.height,g.coverage,f.sceneTexture);
+            ItrpSceneBridge.SceneInput input=ItrpSceneBridge.sceneInput(owner,f.itrpMaterial,f.width,f.height,g.coverage,f.sceneTexture,
+                    f.diagnose?reason -> f.itrpReason=reason:null);
             if(input==null)return;
             if(itrpBackground==null)itrpBackground=new SkyGlProgram("itrp_background");
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER,g.hdrFbo);
@@ -424,7 +491,7 @@ public final class SkyWindowRenderer {
                     SkySkin skin=entry.getKey();int style=skin.texture()!=null?3:skin.shaderMode();
                     itrpBackground.integer("Style",style);itrpBackground.integer("Material",skin.material());
                     itrpBackground.texture("Image",0,skin.texture()!=null?texture(skin.texture()):f.sceneTexture,style==3?panorama:linear);
-                    itrpBackground.drawPositions(entry.getValue().data,entry.getValue().count);
+                    drawWindowPositions(f,itrpBackground,entry.getValue());
                 }
                 f.itrpSceneInput=input.color();f.itrpOpaqueDepth=input.opaqueDepth();f.itrpExposure=input.exposure();f.itrpInjected=true;
                 if(bridgeDraws++<3)SkyboxBlockMod.LOGGER.info("[skyboxblock] ITRP scene input injected before composite40: view={} materials={} input={} depth={} exposure={}",f.token,f.batches.size(),input.color(),input.opaqueDepth(),input.exposure());
@@ -516,7 +583,12 @@ public final class SkyWindowRenderer {
     private static void resolve(Frame f) {
         if(!f.lateResolve||f.resolved||!f.drawn||!f.worldTargetReady||f.shadow||f.batches.isEmpty()||f.worldColor<=0)return;
         try(var timing=SkyRenderPerf.span(SkyRenderPerf.Stage.RESOLVE,f.root()); SkyGlScope ignored=new SkyGlScope()) {
-            programs();Gpu g=gpu(f);if(!f.depthCopied)copyDepth(f,g);if(!f.depthCopied)return;
+            programs();Gpu g=gpu(f);if(!f.depthCopied)copyDepth(f,g);
+            if(!f.depthCopied) {
+                if(f.diagnose) f.drawReason="final depth unavailable";
+                return;
+            }
+            if(f.diagnose) f.drawReason="";
             var target=Minecraft.getInstance().gameRenderer.mainRenderTarget();
             int w=target.width,h=target.height;
             // Only exact same-view rendering is reusable; TAA/FSR or a different extent keeps the original path.
@@ -556,7 +628,7 @@ public final class SkyWindowRenderer {
             SkySkin skin=entry.getKey();int style=skin.texture()!=null?3:skin.shaderMode();
             window.integer("Style",style);window.integer("Material",skin.material());
             window.texture("Image",0,skin.texture()!=null?texture(skin.texture()):f.sceneTexture,style==3?panorama:linear);
-            window.drawPositions(entry.getValue().data,entry.getValue().count);
+            drawWindowPositions(f,window,entry.getValue());
         }
     }
     static int gl(com.mojang.blaze3d.textures.GpuTexture texture) {
